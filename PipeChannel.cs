@@ -28,14 +28,12 @@ class PipeChannel : IDisposable
     public event EventHandler<MessageReceivedEventArgs>? MessageReceived;
     public event EventHandler<DataReceivedEventArgs>?    DataReceived;
 
-    public PipeChannel(
-        string msgSendPath, string msgRecvPath,
-        string dataSendPath, string dataRecvPath)
+    public PipeChannel(string pipeName = "/tmp/agent")
     {
-        var msgSend  = new FileStream(msgSendPath,  FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-        var msgRecv  = new FileStream(msgRecvPath,  FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
-        var dataSend = new FileStream(dataSendPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-        var dataRecv = new FileStream(dataRecvPath, FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
+        var msgSend  = new FileStream($"{pipeName}-upstream-cmd",      FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+        var msgRecv  = new FileStream($"{pipeName}-downstream-cmd",  FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
+        var dataSend = new FileStream($"{pipeName}-upstream-data",   FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+        var dataRecv = new FileStream($"{pipeName}-downstream-data", FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
 
         _msgWriter  = new StreamWriter(msgSend)  { AutoFlush = true };
         _msgReader  = new StreamReader(msgRecv);

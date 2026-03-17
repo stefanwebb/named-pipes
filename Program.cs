@@ -1,9 +1,4 @@
-const string msgSendPath  = "/tmp/msg_cs_to_py";
-const string msgRecvPath  = "/tmp/msg_py_to_cs";
-const string dataSendPath = "/tmp/data_cs_to_py";
-const string dataRecvPath = "/tmp/data_py_to_cs";
-
-using var channel = new PipeChannel(msgSendPath, msgRecvPath, dataSendPath, dataRecvPath);
+using var channel = new PipeChannel("/tmp/agent");
 
 var done = new ManualResetEventSlim();
 
