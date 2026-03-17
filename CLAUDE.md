@@ -10,7 +10,7 @@ A proof-of-concept for low-latency interprocess communication (IPC) via named pi
 
 ### Python server
 ```bash
-python pipe_reader.py   # Start the Python server (creates pipes, listens for messages)
+python main.py   # Start the Python server (creates pipes, listens for messages)
 ```
 
 ### C# client
@@ -19,7 +19,7 @@ dotnet build            # Build the C# client
 dotnet run              # Run the C# client (requires Python server to be running first)
 ```
 
-**Startup order matters:** The Python server (`pipe_reader.py`) must be started before the C# client (`dotnet run`), because Python creates the FIFO files and C# opens them.
+**Startup order matters:** The Python server (`main.py`) must be started before the C# client (`dotnet run`), because Python creates the FIFO files and C# opens them.
 
 ## Architecture
 
@@ -34,11 +34,10 @@ Four named pipes carry traffic between the processes. Paths are derived from a `
 
 All four FIFOs are opened `O_RDWR` on the Python side so the open calls never block and the read end never sees EOF when the remote writer closes its side.
 
-### Python side (`pipe_reader.py`)
-- `PipeChannel` class manages all four pipes as a context manager.
-- A `HANDLERS` dict maps command strings to handler functions.
-- `dispatch()` routes incoming messages to handlers.
-- `main()` runs a simple blocking read loop.
+### Python side (`pipe_reader.py`, `main.py`, `utils.py`)
+- `pipe_reader.py`: `PipeChannel` class manages all four pipes as a context manager. `ch.handler("CMD")` is a decorator that registers handler functions. `ch.dispatch()` routes incoming messages to handlers.
+- `main.py`: registers handlers via `@ch.handler(...)` and runs the blocking read loop.
+- `utils.py`: `get_pids_for_pipe()` uses `psutil` to find which PIDs have a pipe path open — useful for debugging.
 
 ### C# side (`PipeChannel.cs`, `Program.cs`)
 - `PipeChannel` wraps the four `FileStream`s with separate background listener threads (`MsgListener`, `DataListener`) for non-blocking receives.
@@ -48,5 +47,3 @@ All four FIFOs are opened `O_RDWR` on the Python side so the open calls never bl
 ### Supported commands
 `PING` → `PONG`, `GREET`, `TIME`, `ECHO`, `SEND_BYTES` (sends data on the data pipe and echoes it back), `QUIT` → `BYE`
 
-### `main.py`
-Scratch file using `psutil` to look up which PIDs have a given pipe path open — useful for debugging pipe ownership.
