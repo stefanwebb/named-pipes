@@ -30,10 +30,10 @@ class PipeChannel : IDisposable
 
     public PipeChannel(string pipeName = "/tmp/agent")
     {
-        var msgSend  = new FileStream($"{pipeName}-upstream-cmd",      FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-        var msgRecv  = new FileStream($"{pipeName}-downstream-cmd",  FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
-        var dataSend = new FileStream($"{pipeName}-upstream-data",   FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-        var dataRecv = new FileStream($"{pipeName}-downstream-data", FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
+        var msgSend  = new FileStream($"{pipeName}-cmd-upstream",   FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+        var msgRecv  = new FileStream($"{pipeName}-cmd-downstream", FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
+        var dataSend = new FileStream($"{pipeName}-data-upstream",  FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+        var dataRecv = new FileStream($"{pipeName}-data-downstream",FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
 
         _msgWriter  = new StreamWriter(msgSend)  { AutoFlush = true };
         _msgReader  = new StreamReader(msgRecv);

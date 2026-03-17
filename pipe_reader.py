@@ -16,19 +16,19 @@ class PipeChannel:
     remote writer temporarily closes its side.
 
     Pipe paths are derived from `pipe_name`:
-        <pipe_name>-upstream-cmd    C# → Python  (messages)
-        <pipe_name>-downstream-cmd  Python → C#  (messages)
-        <pipe_name>-upstream-data   C# → Python  (binary)
-        <pipe_name>-downstream-data Python → C#  (binary)
+        <pipe_name>-cmd-upstream    C# → Python  (messages)
+        <pipe_name>-cmd-downstream  Python → C#  (messages)
+        <pipe_name>-data-upstream   C# → Python  (binary)
+        <pipe_name>-data-downstream Python → C#  (binary)
 
     Use @ch.handler("<CMD>") to register command handler functions.
     """
 
     def __init__(self, pipe_name: str = "/tmp/agent"):
-        self._upstream_cmd    = f"{pipe_name}-upstream-cmd"
-        self._downstream_cmd  = f"{pipe_name}-downstream-cmd"
-        self._upstream_data   = f"{pipe_name}-upstream-data"
-        self._downstream_data = f"{pipe_name}-downstream-data"
+        self._upstream_cmd    = f"{pipe_name}-cmd-upstream"
+        self._downstream_cmd  = f"{pipe_name}-cmd-downstream"
+        self._upstream_data   = f"{pipe_name}-data-upstream"
+        self._downstream_data = f"{pipe_name}-data-downstream"
         self._all_pipes = [
             self._upstream_cmd, self._downstream_cmd,
             self._upstream_data, self._downstream_data,

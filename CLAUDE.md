@@ -27,10 +27,10 @@ Four named pipes carry traffic between the processes. Paths are derived from a `
 
 | Pipe path | Direction | Format |
 |---|---|---|
-| `<pipe_name>-upstream-cmd` | C# → Python | Newline-delimited JSON `{"cmd": "...", "data": "..."}` |
-| `<pipe_name>-downstream-cmd` | Python → C# | Same |
-| `<pipe_name>-upstream-data` | C# → Python | 4-byte big-endian length prefix + raw bytes |
-| `<pipe_name>-downstream-data` | Python → C# | Same |
+| `<pipe_name>-cmd-upstream` | C# → Python | Newline-delimited JSON `{"cmd": "...", "data": "..."}` |
+| `<pipe_name>-cmd-downstream` | Python → C# | Same |
+| `<pipe_name>-data-upstream` | C# → Python | 4-byte big-endian length prefix + raw bytes |
+| `<pipe_name>-data-downstream` | Python → C# | Same |
 
 All four FIFOs are opened `O_RDWR` on the Python side so the open calls never block and the read end never sees EOF when the remote writer closes its side.
 
