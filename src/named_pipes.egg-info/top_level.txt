@@ -1,2 +1,0 @@
-MyClientConsole
-named_pipes
