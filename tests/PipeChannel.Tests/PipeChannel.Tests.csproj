@@ -17,8 +17,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Link PipeChannel.cs from the repo root without referencing the Exe project -->
-    <Compile Include="..\..\PipeChannel.cs" />
+    <!-- Link PipeChannel.cs from src without referencing the Exe project -->
+    <Compile Include="..\..\src\MyClientConsole\PipeChannel.cs" />
   </ItemGroup>
 
 </Project>
