@@ -9,7 +9,7 @@ import pytest
 mock_vllm = MagicMock()
 sys.modules["vllm"] = mock_vllm
 
-from named_pipes import pipe_reader
+from named_pipes import pipe_channel
 from named_pipes.llm_pipe_channel import LLMPipeChannel
 
 
@@ -26,9 +26,9 @@ def make_llm_channel(reply: str = "Hello!"):
     mock_vllm.LLM.return_value.chat.return_value = [mock_output]
 
     with (
-        patch.object(pipe_reader, "ensure_pipe"),
-        patch.object(pipe_reader.os, "open", return_value=3),
-        patch.object(pipe_reader.os, "fdopen", return_value=MagicMock()),
+        patch.object(pipe_channel, "ensure_pipe"),
+        patch.object(pipe_channel.os, "open", return_value=3),
+        patch.object(pipe_channel.os, "fdopen", return_value=MagicMock()),
     ):
         ch = LLMPipeChannel("mock-model", "/tmp/test-llm-pipe")
     return ch
@@ -67,9 +67,9 @@ class TestLLMPipeChannel:
         mock_vllm.reset_mock()
 
         with (
-            patch.object(pipe_reader, "ensure_pipe"),
-            patch.object(pipe_reader.os, "open", return_value=3),
-            patch.object(pipe_reader.os, "fdopen", return_value=MagicMock()),
+            patch.object(pipe_channel, "ensure_pipe"),
+            patch.object(pipe_channel.os, "open", return_value=3),
+            patch.object(pipe_channel.os, "fdopen", return_value=MagicMock()),
         ):
             LLMPipeChannel("mock-model", "/tmp/test-llm-pipe", temperature=0.7, max_tokens=256)
 
