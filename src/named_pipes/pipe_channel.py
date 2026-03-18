@@ -77,6 +77,23 @@ class PipeChannel:
             return fn
         return decorator
 
+    def listen(self):
+        """Block and dispatch messages until a QUIT command is received."""
+        print("Pipes open. Listening for messages (send QUIT to stop)...")
+        try:
+            while True:
+                msg = self.recv_message()
+                if not msg:
+                    continue
+                print(f"Received: {msg}")
+                if msg["cmd"].upper() == "QUIT":
+                    self.send_message("BYE")
+                    print("Quit received. Shutting down.")
+                    break
+                self.dispatch(msg)
+        except KeyboardInterrupt:
+            print("\nShutting down.")
+
     def dispatch(self, msg: dict):
         cmd  = msg["cmd"].upper()
         data = msg.get("data", "")

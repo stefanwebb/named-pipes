@@ -31,20 +31,7 @@ def main():
             ch.send_data(raw)
             ch.send_message("OK", f"echoed {len(raw)} bytes")
 
-        print("Pipes open. Listening for messages (send QUIT to stop)...")
-        try:
-            while True:
-                msg = ch.recv_message()
-                if not msg:
-                    continue
-                print(f"Received: {msg}")
-                if msg["cmd"].upper() == "QUIT":
-                    ch.send_message("BYE")
-                    print("Quit received. Shutting down.")
-                    break
-                ch.dispatch(msg)
-        except KeyboardInterrupt:
-            print("\nShutting down.")
+        ch.listen()
 
 
 if __name__ == "__main__":
