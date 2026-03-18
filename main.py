@@ -8,24 +8,24 @@ def main():
     with PipeChannel() as ch:
 
         @ch.handler("PING")
-        def handle_ping(_data: str):
+        def on_ping(_data: str):
             ch.send_message("PONG")
 
         @ch.handler("GREET")
-        def handle_greet(data: str):
+        def on_greet(data: str):
             name = data or "stranger"
             ch.send_message("GREET", f"Hello, {name}!")
 
         @ch.handler("TIME")
-        def handle_time(_data: str):
+        def on_time(_data: str):
             ch.send_message("TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
         @ch.handler("ECHO")
-        def handle_echo(data: str):
+        def on_echo(data: str):
             ch.send_message("ECHO", data)
 
         @ch.handler("SEND_BYTES")
-        def handle_send_bytes(_data: str):
+        def on_send_bytes(_data: str):
             raw = ch.recv_data()
             print(f"  Received {len(raw)} bytes: {list(raw)}")
             ch.send_data(raw)
