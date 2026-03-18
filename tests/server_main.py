@@ -5,13 +5,8 @@ Usage: python3 tests/server_main.py [pipe_name]
   pipe_name defaults to /tmp/agent
 """
 import datetime
-import sys
-import os
 
-# Ensure repo root is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from pipe_reader import PipeChannel
+from named_pipes import PipeChannel
 
 
 def main():

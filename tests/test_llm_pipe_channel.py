@@ -1,7 +1,6 @@
 """Unit tests for LLMPipeChannel (vllm stubbed, no real FIFOs created)."""
 import json
 import sys
-import os
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -10,11 +9,8 @@ import pytest
 mock_vllm = MagicMock()
 sys.modules["vllm"] = mock_vllm
 
-# Ensure repo root is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-import pipe_reader
-from llm_pipe_channel import LLMPipeChannel
+from named_pipes import pipe_reader
+from named_pipes.llm_pipe_channel import LLMPipeChannel
 
 
 # ---------------------------------------------------------------------------

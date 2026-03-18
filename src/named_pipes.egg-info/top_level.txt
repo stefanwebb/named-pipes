@@ -1,0 +1,2 @@
+MyClientConsole
+named_pipes

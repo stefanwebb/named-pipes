@@ -2,7 +2,7 @@ import json
 
 from vllm import LLM, SamplingParams
 
-from pipe_reader import PipeChannel
+from named_pipes.pipe_reader import PipeChannel
 
 
 class LLMPipeChannel(PipeChannel):

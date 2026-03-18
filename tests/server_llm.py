@@ -8,7 +8,6 @@ Usage: python3 tests/server_llm.py [pipe_name]
   pipe_name defaults to /tmp/agent
 """
 import sys
-import os
 from unittest.mock import MagicMock
 
 # Stub vllm before any import of llm_pipe_channel
@@ -21,10 +20,7 @@ mock_output = MagicMock()
 mock_output.outputs[0].text = "Mock LLM reply."
 mock_vllm.LLM.return_value.chat.return_value = [mock_output]
 
-# Ensure repo root is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-from llm_pipe_channel import LLMPipeChannel  # noqa: E402 (import after stub)
+from named_pipes.llm_pipe_channel import LLMPipeChannel  # noqa: E402 (import after stub)
 
 
 def main():

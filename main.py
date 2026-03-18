@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import datetime
 
-from pipe_reader import PipeChannel
+from named_pipes import PipeChannel
 
 
 def main():

@@ -1,14 +1,9 @@
 """Unit tests for pipe_reader.PipeChannel (no real FIFOs created)."""
-import sys
-import os
 from unittest.mock import MagicMock, patch, call
 
 import pytest
 
-# Ensure repo root is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
-import pipe_reader
+from named_pipes import pipe_reader
 
 
 # ---------------------------------------------------------------------------
