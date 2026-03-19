@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "startup",
+      "hooks": [{
+        "type": "command",
+        "command": "echo 'conda activate named-pipes' >> \"$CLAUDE_ENV_FILE\""
+      }]
+    }]
+  }
+}
