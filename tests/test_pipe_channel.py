@@ -1,4 +1,5 @@
 """Unit tests for pipe_channel.PipeChannel (no real FIFOs created)."""
+
 from unittest.mock import MagicMock, patch, call
 
 import pytest
@@ -9,6 +10,7 @@ from named_pipes import pipe_channel
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def make_channel():
     """Return a PipeChannel with all filesystem calls patched out."""
@@ -24,6 +26,7 @@ def make_channel():
 # ---------------------------------------------------------------------------
 # TestHandlerDecorator
 # ---------------------------------------------------------------------------
+
 
 class TestHandlerDecorator:
     def test_registers_handler(self):
@@ -62,6 +65,7 @@ class TestHandlerDecorator:
 # ---------------------------------------------------------------------------
 # TestDispatch
 # ---------------------------------------------------------------------------
+
 
 class TestDispatch:
     def test_calls_registered_handler(self):

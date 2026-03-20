@@ -1,4 +1,5 @@
 """Unit tests for LLMPipeChannel (vllm stubbed, no real FIFOs created)."""
+
 import json
 import sys
 from unittest.mock import MagicMock, patch
@@ -16,6 +17,7 @@ from named_pipes.llm_pipe_channel import LLMPipeChannel
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def make_llm_channel(reply: str = "Hello!"):
     """Return an LLMPipeChannel with filesystem and vllm calls patched."""
@@ -37,6 +39,7 @@ def make_llm_channel(reply: str = "Hello!"):
 # ---------------------------------------------------------------------------
 # TestLLMPipeChannel
 # ---------------------------------------------------------------------------
+
 
 class TestLLMPipeChannel:
     def test_chat_handler_registered(self):
@@ -71,6 +74,10 @@ class TestLLMPipeChannel:
             patch.object(pipe_channel.os, "open", return_value=3),
             patch.object(pipe_channel.os, "fdopen", return_value=MagicMock()),
         ):
-            LLMPipeChannel("mock-model", "/tmp/test-llm-pipe", temperature=0.7, max_tokens=256)
+            LLMPipeChannel(
+                "mock-model", "/tmp/test-llm-pipe", temperature=0.7, max_tokens=256
+            )
 
-        mock_vllm.SamplingParams.assert_called_once_with(temperature=0.7, max_tokens=256)
+        mock_vllm.SamplingParams.assert_called_once_with(
+            temperature=0.7, max_tokens=256
+        )

@@ -7,6 +7,7 @@ server can run without a real GPU or vllm installation.
 Usage: python3 tests/server_llm.py [pipe_name]
   pipe_name defaults to /tmp/agent
 """
+
 import sys
 from unittest.mock import MagicMock
 

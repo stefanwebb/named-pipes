@@ -4,6 +4,7 @@
 Usage: python3 tests/server_main.py [pipe_name]
   pipe_name defaults to /tmp/agent
 """
+
 import datetime
 
 from named_pipes import PipeChannel
@@ -25,7 +26,9 @@ def main():
 
         @ch.handler("TIME")
         def on_time(_data: str):
-            ch.send_message("TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            ch.send_message(
+                "TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
 
         @ch.handler("ECHO")
         def on_echo(data: str):
