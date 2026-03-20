@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import json
 import os
+import select
 import struct
 import threading
 from enum import Enum
@@ -63,7 +64,12 @@ class PipeChannel:
         self._data_recv = os.fdopen(os.open(recv_data, os.O_RDWR), "rb", buffering=0)
         self._data_send = os.fdopen(os.open(send_data, os.O_RDWR), "wb", buffering=0)
 
+        # Internal pipe used by stop() to unblock the listen() loop without
+        # touching the real named pipes.
+        self._stop_r, self._stop_w = os.pipe()
+
         self._handlers: dict[str, callable] = {}
+        self._listener_thread: threading.Thread | None = None
 
     # --- message pipe ---
 
@@ -97,8 +103,17 @@ class PipeChannel:
 
         return decorator
 
+    def stop(self):
+        """Unblock the listen() loop from within the same process.
+
+        Writes a byte to the internal stop pipe, which causes the select()
+        in the listen loop to return immediately without closing or touching
+        the real named pipes.
+        """
+        os.write(self._stop_w, b"\x00")
+
     def listen(self) -> threading.Event:
-        """Start a background thread that dispatches messages until QUIT.
+        """Start a background thread that dispatches messages until QUIT or stop().
 
         Returns a threading.Event that is set when the listener thread exits,
         so the caller can do ``done = ch.listen(); done.wait()``.
@@ -109,6 +124,11 @@ class PipeChannel:
             print("Pipes open. Listening for messages (send QUIT to stop)...")
             try:
                 while True:
+                    readable, _, _ = select.select(
+                        [self._msg_recv, self._stop_r], [], []
+                    )
+                    if self._stop_r in readable:
+                        break
                     msg = self.recv_message()
                     if not msg:
                         continue
@@ -118,13 +138,11 @@ class PipeChannel:
                         print("Quit received. Shutting down.")
                         break
                     self.dispatch(msg)
-            except KeyboardInterrupt:
-                print("\nShutting down.")
             finally:
                 done.set()
 
-        t = threading.Thread(target=_loop, daemon=True)
-        t.start()
+        self._listener_thread = threading.Thread(target=_loop, daemon=True)
+        self._listener_thread.start()
         return done
 
     def dispatch(self, msg: dict):
@@ -136,9 +154,18 @@ class PipeChannel:
         else:
             self.send_message("ERROR", f"unknown command '{cmd}'")
 
-    def close(self):
+    def _close(self):
+        self.stop()
+        if self._listener_thread is not None:
+            self._listener_thread.join()
+            self._listener_thread = None
         for f in (self._msg_recv, self._msg_send, self._data_recv, self._data_send):
             f.close()
+        for fd in (self._stop_r, self._stop_w):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
         for path in self._all_pipes:
             if os.path.exists(path):
                 os.remove(path)
@@ -147,4 +174,4 @@ class PipeChannel:
         return self
 
     def __exit__(self, *_):
-        self.close()
+        self._close()

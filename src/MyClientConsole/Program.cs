@@ -41,4 +41,4 @@ var done = channel.StartListening();
 Console.WriteLine("Sending:  PING");
 channel.SendMessage("PING");
 
-// done.Wait();
+done.Wait();
