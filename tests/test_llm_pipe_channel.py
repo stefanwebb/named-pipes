@@ -4,15 +4,12 @@ import json
 import sys
 from unittest.mock import MagicMock, patch
 
-import pytest
+from named_pipes import pipe_channel
+from named_pipes.llm_pipe_channel import LLMPipeChannel
 
 # Stub vllm before importing anything that touches it
 mock_vllm = MagicMock()
 sys.modules["vllm"] = mock_vllm
-
-from named_pipes import pipe_channel
-from named_pipes.llm_pipe_channel import LLMPipeChannel
-
 
 # ---------------------------------------------------------------------------
 # Helper

@@ -6,6 +6,7 @@ Usage: python3 tests/server_main.py [pipe_name]
 """
 
 import datetime
+import sys
 
 from named_pipes import PipeChannel
 

@@ -16,6 +16,10 @@
         },
         {
           "type": "command",
+          "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -q '\\.py$' && /opt/anaconda3/envs/named-pipes/bin/ruff check --fix \"$f\"; } 2>/dev/null || true"
+        },
+        {
+          "type": "command",
           "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -q '\\.cs$' && dotnet csharpier format \"$f\"; } 2>/dev/null || true"
         }
       ]

@@ -1,8 +1,7 @@
 """Unit tests for pipe_channel.PipeChannel (no real FIFOs created)."""
 
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
-import pytest
 
 from named_pipes import pipe_channel
 
