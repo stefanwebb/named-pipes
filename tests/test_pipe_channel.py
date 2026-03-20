@@ -1,9 +1,9 @@
-"""Unit tests for pipe_channel.PipeChannel (no real FIFOs created)."""
+"""Unit tests for basic_pipe_channel.BasicPipeChannel (no real FIFOs created)."""
 
 from unittest.mock import MagicMock, patch
 
 
-from named_pipes import pipe_channel
+from named_pipes import abstract_pipe_channel, basic_pipe_channel
 
 
 # ---------------------------------------------------------------------------
@@ -12,13 +12,13 @@ from named_pipes import pipe_channel
 
 
 def make_channel():
-    """Return a PipeChannel with all filesystem calls patched out."""
+    """Return a BasicPipeChannel with all filesystem calls patched out."""
     with (
-        patch.object(pipe_channel, "ensure_pipe"),
-        patch.object(pipe_channel.os, "open", return_value=3),
-        patch.object(pipe_channel.os, "fdopen", return_value=MagicMock()),
+        patch.object(abstract_pipe_channel, "ensure_pipe"),
+        patch.object(abstract_pipe_channel.os, "open", return_value=3),
+        patch.object(abstract_pipe_channel.os, "fdopen", return_value=MagicMock()),
     ):
-        ch = pipe_channel.PipeChannel("/tmp/test-pipe")
+        ch = basic_pipe_channel.BasicPipeChannel("/tmp/test-pipe")
     return ch
 
 

@@ -2,10 +2,10 @@ import json
 
 from vllm import LLM, SamplingParams
 
-from named_pipes.pipe_channel import PipeChannel
+from named_pipes.basic_pipe_channel import BasicPipeChannel
 
 
-class LLMPipeChannel(PipeChannel):
+class LLMPipeChannel(BasicPipeChannel):
     """PipeChannel subclass that serves LLM chat inference via vLLM.
 
     Registers a CHAT handler that:

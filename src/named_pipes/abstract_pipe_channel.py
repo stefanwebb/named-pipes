@@ -4,6 +4,7 @@ import os
 import select
 import struct
 import threading
+from abc import ABC, abstractmethod
 from enum import Enum
 
 
@@ -17,12 +18,12 @@ def ensure_pipe(path):
         os.mkfifo(path)
 
 
-class PipeChannel:
-    """Keeps all four named pipes open for the lifetime of the channel.
+class AbstractPipeChannel(ABC):
+    """Base class for named-pipe IPC channels.
 
-    Each pipe is opened O_RDWR so the open call never blocks (no need to
-    coordinate with the remote end) and the read end never sees EOF when the
-    remote writer temporarily closes its side.
+    Manages four named pipes and a background listen loop.  Subclasses
+    must implement ``msg_handler_fn`` and ``data_handler_fn`` to handle
+    incoming messages and data payloads respectively.
 
     Pipe paths are derived from `pipe_name`:
         <pipe_name>-cmd-upstream    client → server  (messages)
@@ -33,8 +34,6 @@ class PipeChannel:
     `role` determines which pipes are used for send vs. receive:
         Role.SERVER  reads upstream,   writes downstream
         Role.CLIENT  reads downstream, writes upstream
-
-    Use @ch.handler("<CMD>") to register command handler functions.
     """
 
     def __init__(self, pipe_name: str = "/tmp/agent", role: Role = Role.SERVER):
@@ -49,9 +48,6 @@ class PipeChannel:
         for path in self._all_pipes:
             ensure_pipe(path)
 
-        # O_RDWR: non-blocking open + prevents EOF on the read end.
-        # We only ever read from _msg_recv / _data_recv and only ever write
-        # to _msg_send / _data_send; the unused direction is just a keeper.
         if role is Role.SERVER:
             recv_cmd, send_cmd = upstream_cmd, downstream_cmd
             recv_data, send_data = upstream_data, downstream_data
@@ -64,12 +60,8 @@ class PipeChannel:
         self._data_recv = os.fdopen(os.open(recv_data, os.O_RDWR), "rb", buffering=0)
         self._data_send = os.fdopen(os.open(send_data, os.O_RDWR), "wb", buffering=0)
 
-        # Internal pipe used by stop() to unblock the listen() loop without
-        # touching the real named pipes.
         self._stop_r, self._stop_w = os.pipe()
 
-        self._handlers: dict[str, callable] = {}
-        self._data_handler_fn: callable | None = None
         self._listener_thread: threading.Thread | None = None
         self._data_listener_thread: threading.Thread | None = None
 
@@ -94,37 +86,26 @@ class PipeChannel:
         self._data_send.write(data)
         self._data_send.flush()
 
-    # --- handler registration and dispatch ---
+    # --- abstract handlers ---
 
-    def handler(self, cmd: str):
-        """Decorator that registers a function as the handler for `cmd`."""
+    @abstractmethod
+    def msg_handler_fn(self, msg: dict):
+        """Called for each incoming message (excluding QUIT, which is handled by the loop)."""
 
-        def decorator(fn):
-            self._handlers[cmd] = fn
-            return fn
+    @abstractmethod
+    def data_handler_fn(self, data: bytes):
+        """Called for each incoming data payload."""
 
-        return decorator
-
-    def data_handler(self, fn):
-        """Decorator that registers a function as the handler for incoming data payloads."""
-        self._data_handler_fn = fn
-        return fn
+    # --- listen loop ---
 
     def stop(self):
-        """Unblock the listen() loop from within the same process.
-
-        Writes a byte to the internal stop pipe, which causes the select()
-        in the listen loop to return immediately without closing or touching
-        the real named pipes.
-        """
+        """Unblock the listen() loop without closing the real named pipes."""
         os.write(self._stop_w, b"\x00")
 
     def listen(self) -> threading.Event:
         """Start background threads that dispatch messages and data until QUIT or stop().
 
-        Both the message pipe and the data pipe are monitored on separate threads.
-        Returns a threading.Event that is set when both listener threads have exited,
-        so the caller can do ``done = ch.listen(); done.wait()``.
+        Returns a threading.Event that is set when both listener threads have exited.
         """
         done = threading.Event()
         threads_remaining = [2]
@@ -154,7 +135,7 @@ class PipeChannel:
                         print("Quit received. Shutting down.")
                         self.stop()
                         break
-                    self.dispatch(msg)
+                    self.msg_handler_fn(msg)
             finally:
                 _mark_done()
 
@@ -167,8 +148,7 @@ class PipeChannel:
                     if self._stop_r in readable:
                         break
                     data = self.recv_data()
-                    if self._data_handler_fn is not None:
-                        self._data_handler_fn(data)
+                    self.data_handler_fn(data)
             finally:
                 _mark_done()
 
@@ -177,15 +157,6 @@ class PipeChannel:
         self._listener_thread.start()
         self._data_listener_thread.start()
         return done
-
-    def dispatch(self, msg: dict):
-        cmd = msg["cmd"].upper()
-        data = msg.get("data", "")
-        fn = self._handlers.get(cmd)
-        if fn:
-            fn(data)
-        else:
-            self.send_message("ERROR", f"unknown command '{cmd}'")
 
     def _close(self):
         self.stop()

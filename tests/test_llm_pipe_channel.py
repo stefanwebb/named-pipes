@@ -4,7 +4,7 @@ import json
 import sys
 from unittest.mock import MagicMock, patch
 
-from named_pipes import pipe_channel
+from named_pipes import abstract_pipe_channel
 from named_pipes.llm_pipe_channel import LLMPipeChannel
 
 # Stub vllm before importing anything that touches it
@@ -25,9 +25,9 @@ def make_llm_channel(reply: str = "Hello!"):
     mock_vllm.LLM.return_value.chat.return_value = [mock_output]
 
     with (
-        patch.object(pipe_channel, "ensure_pipe"),
-        patch.object(pipe_channel.os, "open", return_value=3),
-        patch.object(pipe_channel.os, "fdopen", return_value=MagicMock()),
+        patch.object(abstract_pipe_channel, "ensure_pipe"),
+        patch.object(abstract_pipe_channel.os, "open", return_value=3),
+        patch.object(abstract_pipe_channel.os, "fdopen", return_value=MagicMock()),
     ):
         ch = LLMPipeChannel("mock-model", "/tmp/test-llm-pipe")
     return ch

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import datetime
 
-from named_pipes import PipeChannel
+from named_pipes import BasicPipeChannel
 
 
 def main():
-    with PipeChannel() as ch:
+    with BasicPipeChannel() as ch:
 
         @ch.handler("PING")
         def on_ping(_data: str):

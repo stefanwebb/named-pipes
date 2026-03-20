@@ -8,13 +8,13 @@ Usage: python3 tests/server_main.py [pipe_name]
 import datetime
 import sys
 
-from named_pipes import PipeChannel
+from named_pipes import BasicPipeChannel
 
 
 def main():
     pipe_name = sys.argv[1] if len(sys.argv) > 1 else "/tmp/agent"
 
-    with PipeChannel(pipe_name) as ch:
+    with BasicPipeChannel(pipe_name) as ch:
 
         @ch.handler("PING")
         def on_ping(_data: str):
