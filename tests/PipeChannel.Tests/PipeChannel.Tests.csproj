@@ -1,5 +1,4 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -20,5 +19,4 @@
     <!-- Link PipeChannel.cs from src without referencing the Exe project -->
     <Compile Include="..\..\src\MyClientConsole\PipeChannel.cs" />
   </ItemGroup>
-
 </Project>

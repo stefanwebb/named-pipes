@@ -14,14 +14,14 @@ public class LLMPipeChannelTests : IDisposable
     public LLMPipeChannelTests()
     {
         _pipeName = $"/tmp/pipe-test-{Guid.NewGuid():N}";
-        _server   = StartServer(_pipeName);
+        _server = StartServer(_pipeName);
 
         _messages = Channel.CreateUnbounded<MessageReceivedEventArgs>();
-        _data     = Channel.CreateUnbounded<DataReceivedEventArgs>();
+        _data = Channel.CreateUnbounded<DataReceivedEventArgs>();
 
         _channel = new PipeChannel(_pipeName);
         _channel.MessageReceived += (_, e) => _messages.Writer.TryWrite(e);
-        _channel.DataReceived    += (_, e) => _data.Writer.TryWrite(e);
+        _channel.DataReceived += (_, e) => _data.Writer.TryWrite(e);
         _channel.StartListening();
     }
 
@@ -33,15 +33,15 @@ public class LLMPipeChannelTests : IDisposable
     {
         // Resolve repo root: output is …/tests/csharp/bin/Debug/net10.0/ — 5 levels up.
         var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."));
-        var script   = Path.Combine(repoRoot, "tests", "server_llm.py");
+        var script = Path.Combine(repoRoot, "tests", "server_llm.py");
 
         var psi = new ProcessStartInfo
         {
-            FileName               = "python3",
-            Arguments              = $"{script} {pipeName}",
-            WorkingDirectory       = repoRoot,
+            FileName = "python3",
+            Arguments = $"{script} {pipeName}",
+            WorkingDirectory = repoRoot,
             RedirectStandardOutput = true,
-            UseShellExecute        = false,
+            UseShellExecute = false,
         };
         var proc = Process.Start(psi)!;
 
@@ -49,8 +49,10 @@ public class LLMPipeChannelTests : IDisposable
         while (true)
         {
             var line = proc.StandardOutput.ReadLine();
-            if (line is null) throw new InvalidOperationException("Server exited before becoming ready.");
-            if (line.Contains("Pipes open")) break;
+            if (line is null)
+                throw new InvalidOperationException("Server exited before becoming ready.");
+            if (line.Contains("Pipes open"))
+                break;
         }
         return proc;
     }
@@ -74,10 +76,7 @@ public class LLMPipeChannelTests : IDisposable
     [Fact]
     public async Task Chat_ReturnsChatResponse()
     {
-        var conversation = new[]
-        {
-            new { role = "user", content = "Hello!" },
-        };
+        var conversation = new[] { new { role = "user", content = "Hello!" } };
         var json = JsonSerializer.Serialize(conversation);
 
         _channel.SendMessage("CHAT", json);
@@ -102,7 +101,13 @@ public class LLMPipeChannelTests : IDisposable
     public void Dispose()
     {
         _channel.Dispose();
-        try { _server.Kill(); } catch { /* already exited */ }
+        try
+        {
+            _server.Kill();
+        }
+        catch
+        { /* already exited */
+        }
         _server.Dispose();
     }
 }

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 class MessageReceivedEventArgs(string cmd, string data) : EventArgs
 {
-    public string Cmd  { get; } = cmd;
+    public string Cmd { get; } = cmd;
     public string Data { get; } = data;
 }
 
@@ -16,27 +16,51 @@ class PipeChannel : IDisposable
 {
     private readonly StreamWriter _msgWriter;
     private readonly StreamReader _msgReader;
-    private readonly Stream       _dataWriter;
-    private readonly Stream       _dataReader;
+    private readonly Stream _dataWriter;
+    private readonly Stream _dataReader;
 
-    private readonly Lock _msgWriteLock  = new();
+    private readonly Lock _msgWriteLock = new();
     private readonly Lock _dataWriteLock = new();
 
     private Thread? _msgListenerThread;
     private Thread? _dataListenerThread;
 
     public event EventHandler<MessageReceivedEventArgs>? MessageReceived;
-    public event EventHandler<DataReceivedEventArgs>?    DataReceived;
+    public event EventHandler<DataReceivedEventArgs>? DataReceived;
+
+    public ManualResetEventSlim done;
 
     public PipeChannel(string pipeName = "/tmp/agent")
     {
-        var msgSend  = new FileStream($"{pipeName}-cmd-upstream",   FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-        var msgRecv  = new FileStream($"{pipeName}-cmd-downstream", FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
-        var dataSend = new FileStream($"{pipeName}-data-upstream",  FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
-        var dataRecv = new FileStream($"{pipeName}-data-downstream",FileMode.Open, FileAccess.Read,  FileShare.ReadWrite);
+        done = new ManualResetEventSlim();
 
-        _msgWriter  = new StreamWriter(msgSend)  { AutoFlush = true };
-        _msgReader  = new StreamReader(msgRecv);
+        var msgSend = new FileStream(
+            $"{pipeName}-cmd-upstream",
+            FileMode.Open,
+            FileAccess.Write,
+            FileShare.ReadWrite
+        );
+        var msgRecv = new FileStream(
+            $"{pipeName}-cmd-downstream",
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite
+        );
+        var dataSend = new FileStream(
+            $"{pipeName}-data-upstream",
+            FileMode.Open,
+            FileAccess.Write,
+            FileShare.ReadWrite
+        );
+        var dataRecv = new FileStream(
+            $"{pipeName}-data-downstream",
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite
+        );
+
+        _msgWriter = new StreamWriter(msgSend) { AutoFlush = true };
+        _msgReader = new StreamReader(msgRecv);
         _dataWriter = dataSend;
         _dataReader = dataRecv;
     }
@@ -64,26 +88,33 @@ class PipeChannel : IDisposable
 
     // --- listener threads ---
 
-    public void StartListening()
+    public ManualResetEventSlim StartListening()
     {
-        _msgListenerThread = new Thread(MsgListenerLoop)
+        done.Reset();
+
+        _msgListenerThread = new Thread(() =>
+        {
+            MsgListenerLoop();
+            done.Set();
+        })
         {
             IsBackground = true,
-            Name         = "MsgListener",
+            Name = "MsgListener",
         };
         _dataListenerThread = new Thread(DataListenerLoop)
         {
             IsBackground = true,
-            Name         = "DataListener",
+            Name = "DataListener",
         };
         _msgListenerThread.Start();
         _dataListenerThread.Start();
+        return done;
     }
 
     public void StopListening()
     {
-        _msgReader.Close();    // unblocks ReadLine()
-        _dataReader.Close();   // unblocks ReadExactly()
+        _msgReader.Close(); // unblocks ReadLine()
+        _dataReader.Close(); // unblocks ReadExactly()
         _msgListenerThread?.Join();
         _dataListenerThread?.Join();
     }
@@ -95,16 +126,17 @@ class PipeChannel : IDisposable
             while (true)
             {
                 var line = _msgReader.ReadLine();
-                if (line is null) break;
+                if (line is null)
+                    break;
 
                 using var doc = JsonDocument.Parse(line);
-                var cmd  = doc.RootElement.GetProperty("cmd").GetString()  ?? "";
+                var cmd = doc.RootElement.GetProperty("cmd").GetString() ?? "";
                 var data = doc.RootElement.GetProperty("data").GetString() ?? "";
                 MessageReceived?.Invoke(this, new MessageReceivedEventArgs(cmd, data));
             }
         }
         catch (ObjectDisposedException) { }
-        catch (IOException)             { }
+        catch (IOException) { }
     }
 
     private void DataListenerLoop()
@@ -115,18 +147,19 @@ class PipeChannel : IDisposable
             while (true)
             {
                 _dataReader.ReadExactly(lengthBuf);
-                int    length = BinaryPrimitives.ReadInt32BigEndian(lengthBuf);
-                byte[] data   = new byte[length];
+                int length = BinaryPrimitives.ReadInt32BigEndian(lengthBuf);
+                byte[] data = new byte[length];
                 _dataReader.ReadExactly(data);
                 DataReceived?.Invoke(this, new DataReceivedEventArgs(data));
             }
         }
         catch (ObjectDisposedException) { }
-        catch (IOException)             { }
+        catch (IOException) { }
     }
 
     public void Dispose()
     {
+        done.Set();
         StopListening();
         _msgWriter.Dispose();
         _msgReader.Dispose();

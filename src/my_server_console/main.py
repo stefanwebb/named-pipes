@@ -18,7 +18,9 @@ def main():
 
         @ch.handler("TIME")
         def on_time(_data: str):
-            ch.send_message("TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            ch.send_message(
+                "TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            )
 
         @ch.handler("ECHO")
         def on_echo(data: str):
@@ -31,7 +33,8 @@ def main():
             ch.send_data(raw)
             ch.send_message("OK", f"echoed {len(raw)} bytes")
 
-        ch.listen()
+        done = ch.listen()
+        done.wait()
 
 
 if __name__ == "__main__":

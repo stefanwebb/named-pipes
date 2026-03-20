@@ -1,7 +1,5 @@
 using var channel = new PipeChannel("/tmp/agent");
 
-var done = new ManualResetEventSlim();
-
 byte[] payload = [1, 2, 3, 4, 5, 255, 128, 0];
 
 // Remaining commands to send; each is dispatched from the listener thread
@@ -22,27 +20,25 @@ Queue<Action> steps = new([
     () => channel.SendMessage("QUIT"),
 ]);
 
-channel.MessageReceived += (_, e) =>
+channel.MessageReceived += (sender, e) =>
 {
+    var ch = (PipeChannel)sender!;
+
     Console.WriteLine($"Response: cmd={e.Cmd} data={e.Data}");
 
     if (e.Cmd == "BYE")
-    {
-        done.Set();
-        return;
-    }
+        ch.done.Set();
 
     if (steps.TryDequeue(out var next))
         next();
 };
 
-channel.DataReceived += (_, e) =>
-    Console.WriteLine($"Data:     [{string.Join(", ", e.Data)}]");
+channel.DataReceived += (_, e) => Console.WriteLine($"Data:     [{string.Join(", ", e.Data)}]");
 
-channel.StartListening();
+var done = channel.StartListening();
 
 // Kick off the chain from the main thread
 Console.WriteLine("Sending:  PING");
 channel.SendMessage("PING");
 
-done.Wait();
+// done.Wait();

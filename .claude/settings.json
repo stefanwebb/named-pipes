@@ -6,6 +6,19 @@
         "type": "command",
         "command": "echo 'conda activate named-pipes' >> \"$CLAUDE_ENV_FILE\""
       }]
+    }],
+    "PostToolUse": [{
+      "matcher": "Write|Edit",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -q '\\.py$' && /opt/anaconda3/envs/named-pipes/bin/ruff format \"$f\"; } 2>/dev/null || true"
+        },
+        {
+          "type": "command",
+          "command": "jq -r '.tool_input.file_path' | { read -r f; echo \"$f\" | grep -q '\\.cs$' && dotnet csharpier format \"$f\"; } 2>/dev/null || true"
+        }
+      ]
     }]
   }
 }
