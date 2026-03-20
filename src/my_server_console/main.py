@@ -28,7 +28,10 @@ def main():
 
         @ch.handler("SEND_BYTES")
         def on_send_bytes(_data: str):
-            raw = ch.recv_data()
+            print("Event: on_send_bytes()")
+
+        @ch.data_handler
+        def on_data(raw: bytes):
             print(f"  Received {len(raw)} bytes: {list(raw)}")
             ch.send_data(raw)
             ch.send_message("OK", f"echoed {len(raw)} bytes")

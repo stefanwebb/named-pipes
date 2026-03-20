@@ -69,7 +69,9 @@ class PipeChannel:
         self._stop_r, self._stop_w = os.pipe()
 
         self._handlers: dict[str, callable] = {}
+        self._data_handler_fn: callable | None = None
         self._listener_thread: threading.Thread | None = None
+        self._data_listener_thread: threading.Thread | None = None
 
     # --- message pipe ---
 
@@ -103,6 +105,11 @@ class PipeChannel:
 
         return decorator
 
+    def data_handler(self, fn):
+        """Decorator that registers a function as the handler for incoming data payloads."""
+        self._data_handler_fn = fn
+        return fn
+
     def stop(self):
         """Unblock the listen() loop from within the same process.
 
@@ -113,14 +120,23 @@ class PipeChannel:
         os.write(self._stop_w, b"\x00")
 
     def listen(self) -> threading.Event:
-        """Start a background thread that dispatches messages until QUIT or stop().
+        """Start background threads that dispatch messages and data until QUIT or stop().
 
-        Returns a threading.Event that is set when the listener thread exits,
+        Both the message pipe and the data pipe are monitored on separate threads.
+        Returns a threading.Event that is set when both listener threads have exited,
         so the caller can do ``done = ch.listen(); done.wait()``.
         """
         done = threading.Event()
+        threads_remaining = [2]
+        lock = threading.Lock()
 
-        def _loop():
+        def _mark_done():
+            with lock:
+                threads_remaining[0] -= 1
+                if threads_remaining[0] == 0:
+                    done.set()
+
+        def _msg_loop():
             print("Pipes open. Listening for messages (send QUIT to stop)...")
             try:
                 while True:
@@ -136,13 +152,30 @@ class PipeChannel:
                     if msg["cmd"].upper() == "QUIT":
                         self.send_message("BYE")
                         print("Quit received. Shutting down.")
+                        self.stop()
                         break
                     self.dispatch(msg)
             finally:
-                done.set()
+                _mark_done()
 
-        self._listener_thread = threading.Thread(target=_loop, daemon=True)
+        def _data_loop():
+            try:
+                while True:
+                    readable, _, _ = select.select(
+                        [self._data_recv, self._stop_r], [], []
+                    )
+                    if self._stop_r in readable:
+                        break
+                    data = self.recv_data()
+                    if self._data_handler_fn is not None:
+                        self._data_handler_fn(data)
+            finally:
+                _mark_done()
+
+        self._listener_thread = threading.Thread(target=_msg_loop, daemon=True)
+        self._data_listener_thread = threading.Thread(target=_data_loop, daemon=True)
         self._listener_thread.start()
+        self._data_listener_thread.start()
         return done
 
     def dispatch(self, msg: dict):
@@ -159,6 +192,9 @@ class PipeChannel:
         if self._listener_thread is not None:
             self._listener_thread.join()
             self._listener_thread = None
+        if self._data_listener_thread is not None:
+            self._data_listener_thread.join()
+            self._data_listener_thread = None
         for f in (self._msg_recv, self._msg_send, self._data_recv, self._data_send):
             f.close()
         for fd in (self._stop_r, self._stop_w):
