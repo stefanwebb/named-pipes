@@ -1,0 +1,24 @@
+name: C# Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  csharpier:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+
+      - name: Install CSharpier
+        run: dotnet tool install --global csharpier
+
+      - name: Check formatting (csharpier)
+        run: dotnet csharpier check .
