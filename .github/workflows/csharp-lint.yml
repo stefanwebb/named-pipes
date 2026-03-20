@@ -20,20 +20,5 @@ jobs:
       - name: Install CSharpier
         run: dotnet tool install --global csharpier
 
-      - name: Diagnostics
-        run: |
-          echo "=== PATH ==="
-          echo "$PATH"
-          echo "=== ~/.dotnet/tools contents ==="
-          ls -la ~/.dotnet/tools || echo "directory not found"
-          echo "=== dotnet tool list --global ==="
-          dotnet tool list --global
-          echo "=== which csharpier ==="
-          which csharpier || echo "csharpier not on PATH"
-          echo "=== which dotnet-csharpier ==="
-          which dotnet-csharpier || echo "dotnet-csharpier not on PATH"
-
       - name: Check formatting (csharpier)
-        run: |
-          export PATH="$PATH:$HOME/.dotnet/tools"
-          dotnet csharpier check .
+        run: csharpier check .
