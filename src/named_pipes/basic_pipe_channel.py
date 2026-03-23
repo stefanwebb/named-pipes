@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import json
+
 from named_pipes.abstract_pipe_channel import AbstractPipeChannel, Role
 
 
@@ -28,8 +30,16 @@ class BasicPipeChannel(AbstractPipeChannel):
         self._data_handler_fn = fn
         return fn
 
+    def send_message(self, cmd: str, data: str = ""):
+        super().send_message(json.dumps({"cmd": cmd, "data": data}))
+
     def msg_handler_fn(self, msg: dict):
-        self.dispatch(msg)
+        if msg["cmd"].upper() == "QUIT":
+            self.send_message("BYE")
+            print("Quit received. Shutting down.")
+            self.stop()
+        else:
+            self.dispatch(msg)
 
     def data_handler_fn(self, data: bytes):
         if self._data_handler_fn is not None:

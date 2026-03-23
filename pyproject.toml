@@ -10,7 +10,7 @@ dependencies = ["psutil"]
 
 [project.optional-dependencies]
 llm = ["vllm"]
-dev = ["pytest", "ruff"]
+dev = ["pytest", "ruff", "cchooks"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

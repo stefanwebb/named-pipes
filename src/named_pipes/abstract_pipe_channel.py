@@ -71,8 +71,8 @@ class AbstractPipeChannel(ABC):
         line = self._msg_recv.readline().rstrip("\n")
         return json.loads(line)
 
-    def send_message(self, cmd: str, data: str = ""):
-        self._msg_send.write(json.dumps({"cmd": cmd, "data": data}) + "\n")
+    def send_message(self, data: str):
+        self._msg_send.write(data + "\n")
         self._msg_send.flush()
 
     # --- data pipe (4-byte big-endian length prefix) ---
@@ -90,7 +90,7 @@ class AbstractPipeChannel(ABC):
 
     @abstractmethod
     def msg_handler_fn(self, msg: dict):
-        """Called for each incoming message (excluding QUIT, which is handled by the loop)."""
+        """Called for each incoming message."""
 
     @abstractmethod
     def data_handler_fn(self, data: bytes):
@@ -103,7 +103,7 @@ class AbstractPipeChannel(ABC):
         os.write(self._stop_w, b"\x00")
 
     def listen(self) -> threading.Event:
-        """Start background threads that dispatch messages and data until QUIT or stop().
+        """Start background threads that dispatch messages and data until stop().
 
         Returns a threading.Event that is set when both listener threads have exited.
         """
@@ -118,7 +118,6 @@ class AbstractPipeChannel(ABC):
                     done.set()
 
         def _msg_loop():
-            print("Pipes open. Listening for messages (send QUIT to stop)...")
             try:
                 while True:
                     readable, _, _ = select.select(
@@ -129,12 +128,6 @@ class AbstractPipeChannel(ABC):
                     msg = self.recv_message()
                     if not msg:
                         continue
-                    print(f"Received: {msg}")
-                    if msg["cmd"].upper() == "QUIT":
-                        self.send_message("BYE")
-                        print("Quit received. Shutting down.")
-                        self.stop()
-                        break
                     self.msg_handler_fn(msg)
             finally:
                 _mark_done()
