@@ -1,47 +1,17 @@
 #!/usr/bin/env python3
-import datetime
 
-from named_pipes import BasicPipeChannel
+from named_pipes.transformers_pipe_channel import TransformersPipeChannel
 
 
 def main():
-    with BasicPipeChannel() as ch:
-
-        @ch.handler("PING")
-        def on_ping(_data: str):
-            print("Event: on_ping")
-            ch.send_message("PONG")
-
-        @ch.handler("GREET")
-        def on_greet(data: str):
-            print("Event: on_greet")
-            name = data or "stranger"
-            ch.send_message("GREET", f"Hello, {name}!")
-
-        @ch.handler("TIME")
-        def on_time(_data: str):
-            print("Event: on_time")
-            ch.send_message(
-                "TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            )
-
-        @ch.handler("ECHO")
-        def on_echo(data: str):
-            print("Event: on_echo")
-            ch.send_message("ECHO", data)
-
-        @ch.handler("SEND_BYTES")
-        def on_send_bytes(_data: str):
-            print("Event: on_send_bytes")
-
-        @ch.data_handler
-        def on_data(raw: bytes):
-            print(f"  Received {len(raw)} bytes: {list(raw)}")
-            ch.send_data(raw)
-            ch.send_message("OK", f"echoed {len(raw)} bytes")
-
+    with TransformersPipeChannel(
+        "HuggingFaceTB/SmolLM2-135M-Instruct",
+        max_new_tokens=256,
+        temperature=0.7,
+        do_sample=True,
+    ) as ch:
         done = ch.listen()
-        print("Listening to open pipe...")
+        print("Listening on pipe...")
         done.wait()
 
 
