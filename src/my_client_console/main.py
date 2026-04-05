@@ -30,6 +30,8 @@ def main():
         else:
             print("Ping test passed.")
 
+        ch.send_message("QUIT")
+
 
 if __name__ == "__main__":
     try:

@@ -5,6 +5,7 @@ from named_pipes import BasicPipeChannel, Role
 
 PIPE_NAME = "/tmp/basic_pipe"
 
+
 def main():
     with BasicPipeChannel(pipe_name=PIPE_NAME, role=Role.SERVER) as ch:
 
@@ -37,6 +38,12 @@ def main():
         def on_echo(msg: dict):
             print("Event: on_echo")
             ch.send_message("ECHO", msg["data"])
+
+        @ch.handler("QUIT")
+        def on_quit(_msg: dict):
+            print("Event: on_quit")
+            ch.send_message("BYE")
+            ch.stop()
 
         @ch.handler("SEND_BYTES")
         def on_send_bytes(_msg: dict):
