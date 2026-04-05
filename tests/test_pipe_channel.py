@@ -7,12 +7,12 @@ https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
 """
 
-"""Unit tests for basic_pipe_channel.BasicPipeChannel (no real FIFOs created)."""
+"""Unit tests for basic_named_pipe.BasicPipeChannel (no real FIFOs created)."""
 
 from unittest.mock import MagicMock, patch
 
 
-from named_pipes import abstract_pipe_channel, basic_pipe_channel
+from named_pipes import abstract_pipe_channel, basic_named_pipe
 
 
 # ---------------------------------------------------------------------------
@@ -27,7 +27,7 @@ def make_channel():
         patch.object(abstract_pipe_channel.os, "open", return_value=3),
         patch.object(abstract_pipe_channel.os, "fdopen", return_value=MagicMock()),
     ):
-        ch = basic_pipe_channel.BasicPipeChannel("/tmp/test-pipe")
+        ch = basic_named_pipe.BasicPipeChannel("/tmp/test-pipe")
     return ch
 
 
