@@ -1,78 +1,112 @@
-# Conventions for Named Pipe Tools
-The following conventions define a simple system for interprocess communication between a locally running “tool”, and one or more “users” of that tool via named pipes.
+# Named Pipe Tools — Protocol Specification
 
-In this system, because a tool runs on a separate process independently of the tool user, it can have statefulness via system memory, in contrast to a CLI, which has to use the file system or an external API to affect state. This is useful in scenarios like local model servers, where it is impractical to load the model every time the tool is called. Another useful scenario is for in-memory databases.
+A system for interprocess communication between a locally running **tool** (server) and one or more **clients** (tool users) via named pipes.
 
-Moreover, because the communication transport is implemented by named pipes, the fastest form of interprocess communication outside of shared memory, very low latency can be achieved. This is important for applications like voice agents.
+## Why Named Pipes?
 
-Examples of useful named pipe tools:
+- **Statefulness**: The tool runs as a persistent process with in-memory state, unlike a CLI that must reload state from disk or an API on every invocation.
+- **Low latency**: Named pipes are the fastest IPC mechanism after shared memory — critical for real-time applications like voice agents.
 
-* An LLM inference server implementing the OpenAI Completions API
-* A STT server transcribing streaming audio packets
-* A TTS server generating audio packets from streaming text
-* An in-memory key-value store, vector database, or graph database
-* A web browser automation server
+**Example tools**: LLM inference server, STT/TTS streaming server, in-memory key-value store, vector database, browser automation server.
 
-## Named Pipes
+---
 
-A named pipe is a special file on the filesystem that allows two processes to communicate by reading and writing to it, just like a regular pipe (|), but it persists as a named entry in the filesystem rather than being anonymous and tied to a single command line.
+## Pipe Layout
 
-One process opens it for writing, another opens it for reading, and data flows between them in a first-in, first-out manner.
+Each tool exposes two named pipes:
 
-### Upstream Pipes
+| Pipe | Path | Writer(s) | Reader |
+|------|------|-----------|--------|
+| **Upstream** | `/tmp/tool-{name}` | One or more clients | The tool (single reader) |
+| **Downstream** (per client) | `/tmp/tool-{name}-{pid}` | The tool | A single client |
 
-There is a single upstream named pipe for each running tool located at `/tmp/tool-[tool name]`, for example, `/tmp/tool-llm-server`.
+> **Naming constraint**: A tool's human-readable name must not end with `-{integer}`, as that suffix is reserved for downstream pipe identification.
 
-Multiple processes can open and write to the same upstream pipe.
+### Lifecycle
 
-A single process - the tool - creates, opens, and reads from this pipe.
+| Resource | Created by | Deleted by |
+|----------|-----------|------------|
+| Upstream pipe | Tool | Tool (on exit) |
+| Downstream pipe (`-{pid}`) | Client | Client (on disconnect) |
 
-The tool is responsible for deleting the pipe once it finishes.
+### Subscription Flow
 
-### Downstream Pipes
+1. Client creates its downstream pipe at `/tmp/tool-{name}-{pid}`.
+2. Client sends a `subscribe` message to the upstream pipe.
+3. Tool opens the downstream pipe and confirms with `{ "result": "subscribed" }`.
+4. Tool writes to all subscribed downstream pipes on every response.
 
-A downstream pipe is a named pipe located at `/tmp/tool-[tool name]-[pid]`, for example, `/tmp/tool-llm-server-519`.
-
-Due to this convention, a tool’s human readable name cannot end with `-[integer]`
-
-A single process, the tool user with process id `[pid]`, creates the corresponding downstream pipe, opens it, and reads from it
-
-After creating the downstream pipe, the tool user registers its process id with the tool by sending it a subscribe message.
-
-The tool writes to all subscribed downstream pipes each time a message is sent.
-
-## Clients and Servers
-
-The tool is a “server” that listens to and reads from upstream pipe and writes to downstream pipe(s).
-
-A user of the tool is a “client” that listens to and reads its downstream pipe and writes to the upstream pipe of the server.
-
-The tool is responsible for creating and deleting the upstream pipe and each client is responsible for creating and deleting its downstream pipe.
+---
 
 ## Message Protocol
 
-The requirements on the message protocol between the tool and its user(s) are minimal:
+All messages are **JSON objects**, one per write.
 
-Messages sent and received between the tool and its user(s) must be in JSON format.
+### Rule
 
-For every message received by the tool except for the unsubscribe command, it must send a message to all subscribed pipes, even if it is just a single EOF.
+For every message received **except `unsubscribe`**, the tool must write a response to all subscribed downstream pipes — even if the response is just an empty acknowledgment.
 
-### Required Messages
-The tool must respond to the following messages:
+### Required Commands
 
-{ pid: <pid of caller>, cmd: “subscribe” } ⇒ Opens the downstream pipe and responds with { result: “subscribed” }
+Every tool must handle these commands. The `pid` field identifies the calling client.
 
-{ pid: <pid of caller>, cmd: “unsubscribe” } ⇒ Closes the downstream pipe if it is open. No response as the communication channel is closed.
+#### `subscribe`
+```json
+// Request
+{ "pid": 1234, "cmd": "subscribe" }
 
-{ pid: <pid of caller>, cmd: “description” } ⇒ Returns a natural language description of when it should be used
+// Response (to all subscribers)
+{ "result": "subscribed" }
+```
+Opens the client's downstream pipe.
 
-{ pid: <pid of caller>, cmd: “help” } ⇒ Returns an agent SKILL.md as { result: “[content of SKILL.md]”}
+#### `unsubscribe`
+```json
+// Request
+{ "pid": 1234, "cmd": "unsubscribe" }
 
-{ pid: <pid of caller>, cmd: “exit” } ⇒ Requests that the tool process terminate. If it decides to honor the request, it responds with { result: “exiting” }, and if not it responds with { result: “rejected” }. Before exiting, the tool will broadcast the message { result: “exiting” } to all clients that are subscribed to it.
+// No response (downstream pipe is now closed)
+```
+Closes the client's downstream pipe.
 
-There are no other restrictions on the protocol of messages sent to the tool aside from that they must be valid JSON.
+#### `description`
+```json
+// Request
+{ "pid": 1234, "cmd": "description" }
+
+// Response
+{ "result": "Natural language description of when to use this tool" }
+```
+
+#### `help`
+```json
+// Request
+{ "pid": 1234, "cmd": "help" }
+
+// Response
+{ "result": "<content of SKILL.md>" }
+```
+
+#### `exit`
+```json
+// Request
+{ "pid": 1234, "cmd": "exit" }
+
+// Response (if honored)
+{ "result": "exiting" }
+
+// Response (if rejected)
+{ "result": "rejected" }
+```
+If the tool honors the request, it broadcasts `{ "result": "exiting" }` to all subscribed clients before shutting down.
+
+### Custom Commands
+
+Tools may define additional commands. The only constraint is that all messages must be valid JSON.
+
+---
 
 ## Future Work
 
-* Extend this system so that tools and users can send and receive *binary data*, which is useful, for example, for sending images and audio.
-* Determine whether and how a browser could interact with a named pipe tool.
+- **Binary data support**: Extend the protocol to handle raw binary payloads (images, audio).
+- **Browser integration**: Determine whether and how a browser could interact with a named pipe tool.
