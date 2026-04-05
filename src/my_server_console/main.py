@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 import datetime
 
-from named_pipes import BasicPipeChannel
+from named_pipes import BasicPipeChannel, Role
 
+PIPE_NAME = "/tmp/basic_pipe"
 
 def main():
-    with BasicPipeChannel() as ch:
+    with BasicPipeChannel(pipe_name=PIPE_NAME, role=Role.SERVER) as ch:
+
         @ch.handler("SUBSCRIBE")
         def on_subscribe(msg: dict):
-            print(f"Client {msg["pid"]} subscribed to server {ch._pid}")
-            ch.subscribe(msg["pid"])
+            pid = msg["pid"]
+            print(f"Client {pid} subscribed to server {ch._pid}")
+            ch.subscribe(pid)
+            ch.send_message("SUBSCRIBED")
 
         @ch.handler("PING")
         def on_ping(_msg: dict):

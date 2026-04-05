@@ -89,12 +89,12 @@ class DataNamedPipe(ABC):
 
     # --- listen loop ---
 
-    def stop(self):
-        """Unblock the listen() loop."""
+    def stop_data(self):
+        """Unblock the listen_data() loop."""
         os.write(self._data_stop_w, b"\x00")
 
-    def listen(self) -> threading.Event:
-        """Start a background thread that dispatches data until stop().
+    def listen_data(self) -> threading.Event:
+        """Start a background thread that dispatches data until stop_data().
 
         Returns a threading.Event that is set when the listener thread exits.
         """
@@ -117,8 +117,8 @@ class DataNamedPipe(ABC):
         self._data_listener_thread.start()
         return done
 
-    def _close(self):
-        self.stop()
+    def _close_data(self):
+        self.stop_data()
         if self._data_listener_thread is not None:
             self._data_listener_thread.join()
             self._data_listener_thread = None
@@ -138,4 +138,4 @@ class DataNamedPipe(ABC):
         return self
 
     def __exit__(self, *_):
-        self._close()
+        self._close_data()

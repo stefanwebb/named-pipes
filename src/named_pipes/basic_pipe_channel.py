@@ -16,7 +16,7 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
 
     def __init__(self, pipe_name: str = "/tmp/basic_pipe", role: Role = Role.SERVER):
         TextNamedPipe.__init__(self, pipe_name, role)
-        DataNamedPipe.__init__(self, pipe_name, role)
+        DataNamedPipe.__init__(self, pipe_name + "_data", role)
         self._handlers: dict[str, callable] = {}
         self._data_handler_fn_impl: callable | None = None
 
@@ -43,7 +43,8 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
         DataNamedPipe.unsubscribe(self, pid)
 
     def send_message(self, cmd: str, data: str = ""):
-        super().send_message(json.dumps({"cmd": cmd, "data": data}))
+        msg = {"cmd": cmd, "data": data, "pid": self._pid}
+        super().send_message(json.dumps(msg))
 
     def msg_handler_fn(self, msg: dict):
         if msg["cmd"].upper() == "QUIT":
@@ -67,7 +68,7 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
 
     def stop(self):
         TextNamedPipe.stop(self)
-        DataNamedPipe.stop(self)
+        DataNamedPipe.stop_data(self)
 
     def listen(self) -> threading.Event:
         """Start background threads for both text and data pipes.
@@ -75,7 +76,7 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
         Returns a threading.Event that is set when both listener threads have exited.
         """
         text_done = TextNamedPipe.listen(self)
-        data_done = DataNamedPipe.listen(self)
+        data_done = DataNamedPipe.listen_data(self)
 
         done = threading.Event()
 
@@ -89,7 +90,7 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
 
     def _close(self):
         TextNamedPipe._close(self)
-        DataNamedPipe._close(self)
+        DataNamedPipe._close_data(self)
 
     def __enter__(self):
         return self

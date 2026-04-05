@@ -48,6 +48,7 @@ class TextNamedPipe(ABC):
             downstream = f"{pipe_name}-{self._pid}"
             ensure_pipe(downstream)
             self._msg_recv = os.fdopen(os.open(downstream, os.O_RDWR), "r", buffering=1)
+            self._msg_send = os.fdopen(os.open(pipe_name, os.O_RDWR), "w", buffering=1)
             self._owned_pipes = [downstream]
 
     # --- subscribe / unsubscribe (server only) ---
@@ -76,10 +77,13 @@ class TextNamedPipe(ABC):
         return json.loads(line)
 
     def send_message(self, data: str):
-        """Broadcast a message to all downstream subscribers."""
-        for _, f in self._subscribers.values():
-            f.write(data + "\n")
-            f.flush()
+        if self._role is Role.SERVER:
+            for _, f in self._subscribers.values():
+                f.write(data + "\n")
+                f.flush()
+        else:
+            self._msg_send.write(data + "\n")
+            self._msg_send.flush()
 
     # --- abstract handler ---
 
@@ -128,6 +132,8 @@ class TextNamedPipe(ABC):
         if self._role is Role.SERVER:
             for pid in list(self._subscribers):
                 self.unsubscribe(pid)
+        else:
+            self._msg_send.close()
         for fd in (self._text_stop_r, self._text_stop_w):
             try:
                 os.close(fd)
