@@ -12,7 +12,6 @@ from named_pipes.text_named_pipe import TextNamedPipe
 from named_pipes.text_named_pipe import Role
 from named_pipes.basic_named_pipe import BasicPipeChannel
 from named_pipes.tool_named_pipe import ToolNamedPipe
-from named_pipes.llm_named_pipe import LLMNamedPipe
 from named_pipes.utils import get_pids_for_pipe
 
 __all__ = [
@@ -20,7 +19,6 @@ __all__ = [
     "TextNamedPipe",
     "BasicPipeChannel",
     "ToolNamedPipe",
-    "LLMNamedPipe",
     "Role",
     "get_pids_for_pipe",
 ]

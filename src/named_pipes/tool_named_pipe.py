@@ -5,9 +5,7 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-"""
-
-"""ToolNamedPipe — implements the Named Pipe Tools protocol.
+ToolNamedPipe — implements the Named Pipe Tools protocol.
 
 See named-pipe-tools.md for the full specification.
 """

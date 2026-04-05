@@ -5,9 +5,7 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-"""
-
-"""Subprocess server for C# PipeChannel integration tests.
+Subprocess server for C# PipeChannel integration tests.
 
 Usage: python3 tests/server_main.py [pipe_name]
   pipe_name defaults to /tmp/agent
