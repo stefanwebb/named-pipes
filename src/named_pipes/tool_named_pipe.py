@@ -73,26 +73,27 @@ class ToolNamedPipe(TextNamedPipe):
         cmd = msg.get("cmd", "").lower()
         pid = msg.get("pid")
 
-        if cmd == "subscribe":
-            self.subscribe(pid)
-            self.send_response("subscribed")
+        match cmd:
+            case "subscribe":
+                self.subscribe(pid)
+                self.send_response("subscribed")
 
-        elif cmd == "unsubscribe":
-            self.unsubscribe(pid)
-            # No response per protocol spec
+            case "unsubscribe":
+                self.unsubscribe(pid)
+                # No response per protocol spec
 
-        elif cmd == "description":
-            self.send_response(self._description)
+            case "description":
+                self.send_response(self._description)
 
-        elif cmd == "help":
-            self.send_response(self._help_text)
+            case "help":
+                self.send_response(self._help_text)
 
-        elif cmd == "exit":
-            self.send_response("exiting")
-            self.stop()
+            case "exit":
+                self.send_response("exiting")
+                self.stop()
 
-        else:
-            self._dispatch(cmd, msg)
+            case _:
+                self._dispatch(cmd, msg)
 
     def _dispatch(self, cmd: str, msg: dict):
         fn = self._handlers.get(cmd)
