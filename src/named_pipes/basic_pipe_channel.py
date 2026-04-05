@@ -1,20 +1,24 @@
 #!/usr/bin/env python3
 import json
+import threading
 
-from named_pipes.abstract_pipe_channel import AbstractPipeChannel, Role
+from named_pipes.data_named_pipe import DataNamedPipe
+from named_pipes.text_named_pipe import TextNamedPipe
+from named_pipes.text_named_pipe import Role
 
 
-class BasicPipeChannel(AbstractPipeChannel):
+class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
     """Concrete PipeChannel with decorator-based handler registration.
 
     Use ``@ch.handler("<CMD>")`` to register a function for a named command
     and ``@ch.data_handler`` to register a function for incoming data payloads.
     """
 
-    def __init__(self, pipe_name: str = "/tmp/agent", role: Role = Role.SERVER):
-        super().__init__(pipe_name, role)
+    def __init__(self, pipe_name: str = "/tmp/basic_pipe", role: Role = Role.SERVER):
+        TextNamedPipe.__init__(self, pipe_name, role)
+        DataNamedPipe.__init__(self, pipe_name, role)
         self._handlers: dict[str, callable] = {}
-        self._data_handler_fn: callable | None = None
+        self._data_handler_fn_impl: callable | None = None
 
     def handler(self, cmd: str):
         """Decorator that registers a function as the handler for `cmd`."""
@@ -27,7 +31,7 @@ class BasicPipeChannel(AbstractPipeChannel):
 
     def data_handler(self, fn):
         """Decorator that registers a function as the handler for incoming data payloads."""
-        self._data_handler_fn = fn
+        self._data_handler_fn_impl = fn
         return fn
 
     def send_message(self, cmd: str, data: str = ""):
@@ -42,14 +46,45 @@ class BasicPipeChannel(AbstractPipeChannel):
             self.dispatch(msg)
 
     def data_handler_fn(self, data: bytes):
-        if self._data_handler_fn is not None:
-            self._data_handler_fn(data)
+        if self._data_handler_fn_impl is not None:
+            self._data_handler_fn_impl(data)
 
     def dispatch(self, msg: dict):
         cmd = msg["cmd"].upper()
-        data = msg.get("data", "")
         fn = self._handlers.get(cmd)
         if fn:
-            fn(data)
+            fn(msg)
         else:
             self.send_message("ERROR", f"unknown command '{cmd}'")
+
+    def stop(self):
+        TextNamedPipe.stop(self)
+        DataNamedPipe.stop(self)
+
+    def listen(self) -> threading.Event:
+        """Start background threads for both text and data pipes.
+
+        Returns a threading.Event that is set when both listener threads have exited.
+        """
+        text_done = TextNamedPipe.listen(self)
+        data_done = DataNamedPipe.listen(self)
+
+        done = threading.Event()
+
+        def _wait_both():
+            text_done.wait()
+            data_done.wait()
+            done.set()
+
+        threading.Thread(target=_wait_both, daemon=True).start()
+        return done
+
+    def _close(self):
+        TextNamedPipe._close(self)
+        DataNamedPipe._close(self)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self._close()

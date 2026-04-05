@@ -1,4 +1,16 @@
+import os
+
 import psutil
+
+
+def ensure_pipe(path):
+    if not os.path.exists(path):
+        os.mkfifo(path)
+
+
+def remove_pipe(path):
+    if os.path.exists(path):
+        os.remove(path)
 
 
 def get_pids_for_pipe(pipe_path):
