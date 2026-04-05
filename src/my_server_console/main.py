@@ -6,32 +6,36 @@ from named_pipes import BasicPipeChannel
 
 def main():
     with BasicPipeChannel() as ch:
+        @ch.handler("SUBSCRIBE")
+        def on_subscribe(msg: dict):
+            print(f"Client {msg["pid"]} subscribed to server {ch._pid}")
+            ch.subscribe(msg["pid"])
 
         @ch.handler("PING")
-        def on_ping(_data: str):
+        def on_ping(_msg: dict):
             print("Event: on_ping")
             ch.send_message("PONG")
 
         @ch.handler("GREET")
-        def on_greet(data: str):
+        def on_greet(msg: dict):
             print("Event: on_greet")
-            name = data or "stranger"
+            name = msg["data"] or "stranger"
             ch.send_message("GREET", f"Hello, {name}!")
 
         @ch.handler("TIME")
-        def on_time(_data: str):
+        def on_time(_msg: dict):
             print("Event: on_time")
             ch.send_message(
                 "TIME", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
 
         @ch.handler("ECHO")
-        def on_echo(data: str):
+        def on_echo(msg: dict):
             print("Event: on_echo")
-            ch.send_message("ECHO", data)
+            ch.send_message("ECHO", msg["data"])
 
         @ch.handler("SEND_BYTES")
-        def on_send_bytes(_data: str):
+        def on_send_bytes(_msg: dict):
             print("Event: on_send_bytes")
 
         @ch.data_handler

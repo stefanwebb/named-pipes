@@ -24,46 +24,47 @@ class DataNamedPipe(ABC):
 
     def __init__(
         self,
-        pipe_name: str = "/tmp/pipe",
+        pipe_name: str = "/tmp/pipe_data",
         role: Role = Role.SERVER,
         pid: int | None = None,
     ):
-        self._role = role
+        self._data_role = role
         self._pid = pid if pid is not None else os.getpid()
         self._data_stop_r, self._data_stop_w = os.pipe()
         self._data_listener_thread: threading.Thread | None = None
 
+        self._data_pipe_name = pipe_name
         if role is Role.SERVER:
             ensure_pipe(pipe_name)
             self._data_recv = os.fdopen(
                 os.open(pipe_name, os.O_RDWR), "rb", buffering=0
             )
-            self._owned_pipes = [pipe_name]
-            self._subscribers: dict[int, tuple[str, object]] = {}
+            self._data_owned_pipes = [pipe_name]
+            self._data_subscribers: dict[int, tuple[str, object]] = {}
         else:
             downstream = f"{pipe_name}-{self._pid}"
             ensure_pipe(downstream)
             self._data_recv = os.fdopen(
                 os.open(downstream, os.O_RDWR), "rb", buffering=0
             )
-            self._owned_pipes = [downstream]
+            self._data_owned_pipes = [downstream]
 
     # --- subscribe / unsubscribe (server only) ---
 
-    def subscribe(self, pid: int, filepath: str):
+    def subscribe(self, pid: int, filepath: str | None = None):
         """Add a downstream pipe for *pid*.  Opens ``<filepath>-<pid>``."""
-        if self._role is not Role.SERVER:
+        if self._data_role is not Role.SERVER:
             raise RuntimeError("subscribe is only available on servers")
-        path = f"{filepath}-{pid}"
+        path = f"{filepath or self._data_pipe_name}-{pid}"
         ensure_pipe(path)
         f = os.fdopen(os.open(path, os.O_RDWR), "wb", buffering=0)
-        self._subscribers[pid] = (path, f)
+        self._data_subscribers[pid] = (path, f)
 
     def unsubscribe(self, pid: int):
         """Remove the downstream pipe for *pid* and clean up."""
-        if self._role is not Role.SERVER:
+        if self._data_role is not Role.SERVER:
             raise RuntimeError("unsubscribe is only available on servers")
-        path, f = self._subscribers.pop(pid)
+        path, f = self._data_subscribers.pop(pid)
         f.close()
         remove_pipe(path)
 
@@ -75,7 +76,7 @@ class DataNamedPipe(ABC):
 
     def send_data(self, data: bytes):
         """Broadcast data to all downstream subscribers."""
-        for _, f in self._subscribers.values():
+        for _, f in self._data_subscribers.values():
             f.write(struct.pack(">I", len(data)))
             f.write(data)
             f.flush()
@@ -122,15 +123,15 @@ class DataNamedPipe(ABC):
             self._data_listener_thread.join()
             self._data_listener_thread = None
         self._data_recv.close()
-        if self._role is Role.SERVER:
-            for pid in list(self._subscribers):
+        if self._data_role is Role.SERVER:
+            for pid in list(self._data_subscribers):
                 self.unsubscribe(pid)
         for fd in (self._data_stop_r, self._data_stop_w):
             try:
                 os.close(fd)
             except OSError:
                 pass
-        for path in self._owned_pipes:
+        for path in self._data_owned_pipes:
             remove_pipe(path)
 
     def __enter__(self):

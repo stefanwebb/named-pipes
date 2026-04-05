@@ -24,7 +24,7 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
         """Decorator that registers a function as the handler for `cmd`."""
 
         def decorator(fn):
-            self._handlers[cmd] = fn
+            self._handlers[cmd.upper()] = fn
             return fn
 
         return decorator
@@ -33,6 +33,14 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
         """Decorator that registers a function as the handler for incoming data payloads."""
         self._data_handler_fn_impl = fn
         return fn
+
+    def subscribe(self, pid: int):
+        TextNamedPipe.subscribe(self, pid)
+        DataNamedPipe.subscribe(self, pid)
+
+    def unsubscribe(self, pid: int):
+        TextNamedPipe.unsubscribe(self, pid)
+        DataNamedPipe.unsubscribe(self, pid)
 
     def send_message(self, cmd: str, data: str = ""):
         super().send_message(json.dumps({"cmd": cmd, "data": data}))

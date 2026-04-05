@@ -38,6 +38,7 @@ class TextNamedPipe(ABC):
         self._text_stop_r, self._text_stop_w = os.pipe()
         self._text_listener_thread: threading.Thread | None = None
 
+        self._pipe_name = pipe_name
         if role is Role.SERVER:
             ensure_pipe(pipe_name)
             self._msg_recv = os.fdopen(os.open(pipe_name, os.O_RDWR), "r", buffering=1)
@@ -51,11 +52,11 @@ class TextNamedPipe(ABC):
 
     # --- subscribe / unsubscribe (server only) ---
 
-    def subscribe(self, pid: int, filepath: str):
+    def subscribe(self, pid: int, filepath: str | None = None):
         """Add a downstream pipe for *pid*.  Opens ``<filepath>-<pid>``."""
         if self._role is not Role.SERVER:
             raise RuntimeError("subscribe is only available on servers")
-        path = f"{filepath}-{pid}"
+        path = f"{filepath or self._pipe_name}-{pid}"
         ensure_pipe(path)
         f = os.fdopen(os.open(path, os.O_RDWR), "w", buffering=1)
         self._subscribers[pid] = (path, f)
