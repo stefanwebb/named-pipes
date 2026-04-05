@@ -71,12 +71,11 @@ class TextNamedPipe(ABC):
         self._subscribers[pid] = (path, f)
 
     def unsubscribe(self, pid: int):
-        """Remove the downstream pipe for *pid* and clean up."""
+        """Close the downstream pipe for *pid* on the server side."""
         if self._role is not Role.SERVER:
             raise RuntimeError("unsubscribe is only available on servers")
-        path, f = self._subscribers.pop(pid)
+        _, f = self._subscribers.pop(pid)
         f.close()
-        remove_pipe(path)
 
     # --- message pipe ---
 

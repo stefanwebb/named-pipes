@@ -39,6 +39,7 @@ def main():
             print("Ping test passed.")
 
         ch.send_message("QUIT")
+        ch.stop()
         done.wait(timeout=5.0)
 
 
