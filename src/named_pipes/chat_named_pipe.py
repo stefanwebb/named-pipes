@@ -95,14 +95,16 @@ class ChatNamedPipe(ToolNamedPipe):
         self._generation_kwargs = generation_kwargs
 
         def infer(messages):
-            input_ids = self._tokenizer.apply_chat_template(
+            encoded = self._tokenizer.apply_chat_template(
                 messages,
                 tokenize=True,
                 add_generation_prompt=True,
                 return_tensors="pt",
+                return_dict=True,
             ).to(self._device)
-            output_ids = self._model.generate(input_ids, **self._generation_kwargs)
-            new_tokens = output_ids[0][input_ids.shape[-1] :]
+            prompt_len = encoded["input_ids"].shape[-1]
+            output_ids = self._model.generate(**encoded, **self._generation_kwargs)
+            new_tokens = output_ids[0][prompt_len:]
             return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
 
         self._infer = infer
