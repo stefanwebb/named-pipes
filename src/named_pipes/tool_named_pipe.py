@@ -13,6 +13,7 @@ See named-pipe-tools.md for the full specification.
 """
 
 import json
+from pathlib import Path
 
 from named_pipes.text_named_pipe import TextNamedPipe, Role
 
@@ -36,13 +37,16 @@ class ToolNamedPipe(TextNamedPipe):
         name: str,
         role: Role = Role.SERVER,
         *,
-        description: str = "",
-        help_text: str = "",
+        description: str,
+        help_text: str | None = None,
     ):
         pipe_name = f"/tmp/tool-{name}"
         super().__init__(pipe_name, role)
         self._tool_name = name
         self._description = description
+        if help_text is None:
+            skill_md = Path.cwd() / "SKILL.md"
+            help_text = skill_md.read_text() if skill_md.exists() else description
         self._help_text = help_text
         self._handlers: dict[str, callable] = {}
 
