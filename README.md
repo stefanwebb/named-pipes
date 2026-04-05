@@ -25,7 +25,7 @@ The library builds a hierarchy of abstractions over named pipes, from low-level 
 
 ```
 TextNamedPipe (ABC)       DataNamedPipe (ABC)
-       ↓                         ↓
+       ↓              ↘          ↓
 ToolNamedPipe          BasicPipeChannel (text + data)
        ↓
 ChatNamedPipe
