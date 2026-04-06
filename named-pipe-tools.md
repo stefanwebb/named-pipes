@@ -33,8 +33,8 @@ Each tool exposes two named pipes:
 
 1. Client creates its downstream pipe at `/tmp/tool-{name}-{pid}`.
 2. Client sends a `subscribe` message to the upstream pipe.
-3. Tool opens the downstream pipe and confirms with `{ "result": "subscribed" }`.
-4. Tool writes to all subscribed downstream pipes on every response.
+3. Tool opens the downstream pipe and confirms with `{ "result": "subscribed" }` sent **only to the subscribing client**.
+4. Subsequent responses are routed to the **sender's** downstream pipe only, not broadcast to all subscribers.
 
 ---
 
@@ -44,7 +44,7 @@ All messages are **JSON objects**, one per write.
 
 ### Rule
 
-For every message received **except `unsubscribe`**, the tool must write a response to all subscribed downstream pipes — even if the response is just an empty acknowledgment.
+For every message received **except `unsubscribe`**, the tool must write a response to the **sender's** downstream pipe only (identified by the `pid` field). The sole exception is the `exit` response: the tool broadcasts `{ "result": "exiting" }` to **all** subscribed clients before shutting down.
 
 ### Required Commands
 
@@ -55,7 +55,7 @@ Every tool must handle these commands. The `pid` field identifies the calling cl
 // Request
 { "pid": 1234, "cmd": "subscribe" }
 
-// Response (to all subscribers)
+// Response (to subscribing client only)
 { "result": "subscribed" }
 ```
 Opens the client's downstream pipe.
@@ -74,7 +74,7 @@ Closes the client's downstream pipe.
 // Request
 { "pid": 1234, "cmd": "description" }
 
-// Response
+// Response (to sender only)
 { "result": "Natural language description of when to use this tool" }
 ```
 
@@ -83,7 +83,7 @@ Closes the client's downstream pipe.
 // Request
 { "pid": 1234, "cmd": "help" }
 
-// Response
+// Response (to sender only)
 { "result": "<content of SKILL.md>" }
 ```
 
@@ -92,21 +92,38 @@ Closes the client's downstream pipe.
 // Request
 { "pid": 1234, "cmd": "exit" }
 
-// Response (if honored)
+// Response (broadcast to ALL subscribers, then tool shuts down)
 { "result": "exiting" }
 
-// Response (if rejected)
+// Response (if rejected, to sender only)
 { "result": "rejected" }
 ```
-If the tool honors the request, it broadcasts `{ "result": "exiting" }` to all subscribed clients before shutting down.
+If the tool honors the request, it broadcasts `{ "result": "exiting" }` to **all** subscribed clients before shutting down.
 
 ### Custom Commands
 
-Tools may define additional commands. The only constraint is that all messages must be valid JSON.
+Tools may define additional commands. The only constraint is that all messages must be valid JSON, and responses must be sent only to the requesting client (via its `pid`).
+
+---
+
+## Binary Data Protocol
+
+When binary data is sent upstream (client → tool), the frame format is:
+
+```
+[4-byte PID big-endian][4-byte length big-endian][payload]
+```
+
+When the tool sends binary data downstream to a specific client, the frame format is:
+
+```
+[4-byte length big-endian][payload]
+```
+
+The downstream direction needs no PID because each client has its own dedicated downstream pipe.
 
 ---
 
 ## Future Work
 
-- **Binary data support**: Extend the protocol to handle raw binary payloads (images, audio).
 - **Browser integration**: Determine whether and how a browser could interact with a named pipe tool.
