@@ -41,6 +41,7 @@ class DataNamedPipe(ABC):
         self._data_stop_r, self._data_stop_w = os.pipe()
         self._data_listener_thread: threading.Thread | None = None
 
+        self._data_closed = False
         self._data_pipe_name = pipe_name
         if role is Role.SERVER:
             ensure_pipe(pipe_name)
@@ -126,6 +127,9 @@ class DataNamedPipe(ABC):
         return done
 
     def _close_data(self):
+        if self._data_closed:
+            return
+        self._data_closed = True
         self.stop_data()
         if self._data_listener_thread is not None:
             self._data_listener_thread.join()

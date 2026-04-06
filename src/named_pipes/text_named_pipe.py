@@ -46,6 +46,7 @@ class TextNamedPipe(ABC):
         self._text_stop_r, self._text_stop_w = os.pipe()
         self._text_listener_thread: threading.Thread | None = None
 
+        self._closed = False
         self._pipe_name = pipe_name
         if role is Role.SERVER:
             ensure_pipe(pipe_name)
@@ -131,6 +132,9 @@ class TextNamedPipe(ABC):
         return done
 
     def _close(self):
+        if self._closed:
+            return
+        self._closed = True
         self.stop()
         if self._text_listener_thread is not None:
             self._text_listener_thread.join()
@@ -148,6 +152,9 @@ class TextNamedPipe(ABC):
                 pass
         for path in self._owned_pipes:
             remove_pipe(path)
+
+    def __del__(self):
+        self._close()
 
     def __enter__(self):
         return self
