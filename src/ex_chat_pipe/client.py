@@ -26,7 +26,7 @@ class _LLMClient(TextNamedPipe):
         self.response: str | None = None
         self.reply_received = threading.Event()
 
-    def msg_handler_fn(self, msg: dict):
+    def msg_handler_fn(self, msg: dict, pid: int | None):
         result = msg.get("result", "")
         if result == "subscribed":
             self.subscribed.set()

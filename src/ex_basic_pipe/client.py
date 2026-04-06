@@ -20,12 +20,12 @@ def main():
     with BasicPipeChannel(pipe_name=PIPE_NAME, role=Role.CLIENT) as ch:
 
         @ch.handler("SUBSCRIBED")
-        def on_subscribed(_msg: dict):
+        def on_subscribed(msg: dict, pid: int | None):
             print("Subscribed to server. Sending PING...")
             ch.send_message("PING")
 
         @ch.handler("PONG")
-        def on_pong(_msg: dict):
+        def on_pong(msg: dict, pid: int | None):
             print("Received PONG!")
             pong_received.set()
 
