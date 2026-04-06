@@ -20,6 +20,9 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
 
     Use ``@ch.handler("<CMD>")`` to register a function for a named command
     and ``@ch.data_handler`` to register a function for incoming data payloads.
+
+    Registered command handlers must accept ``(msg: dict, pid: int | None)``.
+    The data handler must accept ``(data: bytes, pid: int | None)``.
     """
 
     def __init__(self, pipe_name: str = "/tmp/basic_pipe", role: Role = Role.SERVER):
@@ -50,29 +53,29 @@ class BasicPipeChannel(TextNamedPipe, DataNamedPipe):
         TextNamedPipe.unsubscribe(self, pid)
         DataNamedPipe.unsubscribe(self, pid)
 
-    def send_message(self, cmd: str, data: str = ""):
+    def send_message(self, cmd: str, data: str = "", pid: int | None = None):
         msg = {"cmd": cmd, "data": data, "pid": self._pid}
-        super().send_message(json.dumps(msg))
+        TextNamedPipe.send_message(self, json.dumps(msg), pid)
 
-    def msg_handler_fn(self, msg: dict):
+    def msg_handler_fn(self, msg: dict, pid: int | None):
         if msg["cmd"].upper() == "QUIT":
-            self.send_message("BYE")
+            self.send_message("BYE", pid=pid)
             print("Quit received. Shutting down.")
             self.stop()
         else:
-            self.dispatch(msg)
+            self.dispatch(msg, pid)
 
-    def data_handler_fn(self, data: bytes):
+    def data_handler_fn(self, data: bytes, pid: int | None):
         if self._data_handler_fn_impl is not None:
-            self._data_handler_fn_impl(data)
+            self._data_handler_fn_impl(data, pid)
 
-    def dispatch(self, msg: dict):
+    def dispatch(self, msg: dict, pid: int | None):
         cmd = msg["cmd"].upper()
         fn = self._handlers.get(cmd)
         if fn:
-            fn(msg)
+            fn(msg, pid)
         else:
-            self.send_message("ERROR", f"unknown command '{cmd}'")
+            self.send_message("ERROR", f"unknown command '{cmd}'", pid=pid)
 
     def stop(self):
         TextNamedPipe.stop(self)

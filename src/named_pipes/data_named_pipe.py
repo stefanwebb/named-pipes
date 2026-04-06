@@ -20,10 +20,17 @@ from named_pipes.utils import ensure_pipe, remove_pipe
 class DataNamedPipe(ABC):
     """Base class for binary data named-pipe IPC.
 
-    Servers open a single upstream pipe for receiving and use subscribe()
-    to add downstream pipes (keyed by pid) for broadcasting data.
+    Upstream wire format (client → server):
+        [4-byte PID big-endian][4-byte length big-endian][payload]
 
-    Clients open a single downstream pipe for receiving.
+    Downstream wire format (server → client):
+        [4-byte length big-endian][payload]  (unchanged)
+
+    Servers open a single upstream pipe for receiving and use subscribe()
+    to add downstream pipes (keyed by pid) for targeted or broadcast data.
+
+    Clients open a downstream pipe for receiving and an upstream pipe for
+    sending (with automatic PID prepending).
 
     Pipe paths:
         <pipe_name>                           client -> server  (one, shared)
@@ -56,6 +63,9 @@ class DataNamedPipe(ABC):
             self._data_recv = os.fdopen(
                 os.open(downstream, os.O_RDWR), "rb", buffering=0
             )
+            self._data_send = os.fdopen(
+                os.open(pipe_name, os.O_RDWR), "wb", buffering=0
+            )
             self._data_owned_pipes = [downstream]
 
     # --- subscribe / unsubscribe (server only) ---
@@ -77,24 +87,60 @@ class DataNamedPipe(ABC):
         f.close()
         remove_pipe(path)
 
-    # --- data pipe (4-byte big-endian length prefix) ---
+    # --- data pipe ---
 
-    def recv_data(self) -> bytes:
-        (length,) = struct.unpack(">I", self._data_recv.read(4))
-        return self._data_recv.read(length)
+    def recv_data(self) -> tuple[int | None, bytes]:
+        """Read one data frame.
 
-    def send_data(self, data: bytes):
-        """Broadcast data to all downstream subscribers."""
-        for _, f in self._data_subscribers.values():
-            f.write(struct.pack(">I", len(data)))
-            f.write(data)
-            f.flush()
+        Server: reads ``[4-byte PID][4-byte length][payload]``; returns ``(pid, payload)``.
+        Client: reads ``[4-byte length][payload]``; returns ``(None, payload)``.
+        """
+        if self._data_role is Role.SERVER:
+            (pid,) = struct.unpack(">I", self._data_recv.read(4))
+            (length,) = struct.unpack(">I", self._data_recv.read(4))
+            return pid, self._data_recv.read(length)
+        else:
+            (length,) = struct.unpack(">I", self._data_recv.read(4))
+            return None, self._data_recv.read(length)
+
+    def send_data(self, data: bytes, pid: int | None = None):
+        """Send *data* to one subscriber (*pid* given) or upstream (client).
+
+        Server with pid: send length-prefixed frame to that subscriber.
+        Server with pid=None: broadcast to all subscribers.
+        Client: prepend own PID then send upstream.
+        """
+        if self._data_role is Role.SERVER:
+            if pid is None:
+                for _, f in self._data_subscribers.values():
+                    f.write(struct.pack(">I", len(data)))
+                    f.write(data)
+                    f.flush()
+            else:
+                subscriber = self._data_subscribers.get(pid)
+                if subscriber is None:
+                    return
+                _, f = subscriber
+                f.write(struct.pack(">I", len(data)))
+                f.write(data)
+                f.flush()
+        else:
+            self._data_send.write(struct.pack(">II", self._pid, len(data)))
+            self._data_send.write(data)
+            self._data_send.flush()
+
+    def broadcast_data(self, data: bytes):
+        """Send *data* to all subscribers (server only convenience alias)."""
+        self.send_data(data, pid=None)
 
     # --- abstract handler ---
 
     @abstractmethod
-    def data_handler_fn(self, data: bytes):
-        """Called for each incoming data payload."""
+    def data_handler_fn(self, data: bytes, pid: int | None):
+        """Called for each incoming data payload.
+
+        *pid* is the sender's PID (server side) or ``None`` (client side).
+        """
 
     # --- listen loop ---
 
@@ -117,8 +163,8 @@ class DataNamedPipe(ABC):
                     )
                     if self._data_stop_r in readable:
                         break
-                    data = self.recv_data()
-                    self.data_handler_fn(data)
+                    pid, data = self.recv_data()
+                    self.data_handler_fn(data, pid)
             finally:
                 done.set()
 
@@ -138,6 +184,8 @@ class DataNamedPipe(ABC):
         if self._data_role is Role.SERVER:
             for pid in list(self._data_subscribers):
                 self.unsubscribe(pid)
+        else:
+            self._data_send.close()
         for fd in (self._data_stop_r, self._data_stop_w):
             try:
                 os.close(fd)
