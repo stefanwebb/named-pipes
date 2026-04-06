@@ -55,7 +55,7 @@ class TestChatNamedPipe:
         pipe = make_chat_pipe()
         assert "chat" in pipe._handlers
 
-    def test_chat_sends_response(self):
+    def test_chat_sends_response_to_sender(self):
         pipe = make_chat_pipe(reply="Hi there!")
         pipe.send_response = MagicMock()
 
@@ -64,9 +64,9 @@ class TestChatNamedPipe:
             "cmd": "chat",
             "messages": [{"role": "user", "content": "Hey"}],
         }
-        pipe._handlers["chat"](msg)
+        pipe._handlers["chat"](msg, 1)
 
-        pipe.send_response.assert_called_once_with("Hi there!")
+        pipe.send_response.assert_called_once_with("Hi there!", 1)
 
     def test_chat_passes_messages_to_llm(self):
         pipe = make_chat_pipe()
@@ -74,7 +74,7 @@ class TestChatNamedPipe:
 
         conversation = [{"role": "user", "content": "What is 2+2?"}]
         msg = {"pid": 1, "cmd": "chat", "messages": conversation}
-        pipe._handlers["chat"](msg)
+        pipe._handlers["chat"](msg, 1)
 
         call_args = mock_vllm.LLM.return_value.chat.call_args
         passed_messages = call_args[0][0]
@@ -93,7 +93,7 @@ class TestChatNamedPipe:
         pipe.send_response = MagicMock()
 
         msg = {"pid": 1, "cmd": "chat"}
-        pipe._handlers["chat"](msg)
+        pipe._handlers["chat"](msg, 1)
 
         call_args = mock_vllm.LLM.return_value.chat.call_args
         passed_messages = call_args[0][0]

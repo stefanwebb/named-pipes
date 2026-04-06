@@ -61,10 +61,10 @@ class ChatNamedPipe(ToolNamedPipe):
                 raise ValueError(f"unknown backend: {backend!r}")
 
         @self.handler("chat")
-        def on_chat(msg: dict):
+        def on_chat(msg: dict, pid: int | None):
             messages = msg.get("messages", [])
             reply = self._infer(messages)
-            self.send_response(reply)
+            self.send_response(reply, pid)
 
     def _init_vllm(self, model: str, **sampling_kwargs):
         from vllm import LLM, SamplingParams
