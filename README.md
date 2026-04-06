@@ -4,6 +4,13 @@ Low-latency interprocess communication via named pipes — lower overhead than l
 
 Built as a foundation for agent/service architectures where a Python orchestrator talks to multiple specialized servers (LLM inference, STT, TTS, vector DBs, etc.) on the same machine.
 
+## Why Named Pipes?
+
+- **Statefulness**: The tool runs as a persistent process with in-memory state, unlike a CLI that must reload state from disk or an API on every invocation.
+- **Low latency**: Named pipes are the fastest IPC mechanism after shared memory — critical for real-time applications like voice agents.
+
+**Example tools**: LLM inference server, STT/TTS streaming server, in-memory key-value store, vector database, browser automation server.
+
 ## Installation
 
 ```bash
@@ -30,13 +37,6 @@ ToolNamedPipe          BasicPipeChannel (text + data)
        ↓
 ChatNamedPipe
 ```
-
-### Why Named Pipes?
-
-- **Statefulness**: The tool runs as a persistent process with in-memory state, unlike a CLI that must reload state from disk or an API on every invocation.
-- **Low latency**: Named pipes are the fastest IPC mechanism after shared memory — critical for real-time applications like voice agents.
-
-**Example tools**: LLM inference server, STT/TTS streaming server, in-memory key-value store, vector database, browser automation server.
 
 ### TextNamedPipe and DataNamedPipe
 
