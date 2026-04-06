@@ -146,7 +146,10 @@ class DataNamedPipe(ABC):
 
     def stop_data(self):
         """Unblock the listen_data() loop."""
-        os.write(self._data_stop_w, b"\x00")
+        try:
+            os.write(self._data_stop_w, b"\x00")
+        except OSError:
+            pass
 
     def listen_data(self) -> threading.Event:
         """Start a background thread that dispatches data until stop_data().

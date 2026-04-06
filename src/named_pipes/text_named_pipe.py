@@ -124,7 +124,10 @@ class TextNamedPipe(ABC):
 
     def stop(self):
         """Unblock the listen() loop."""
-        os.write(self._text_stop_w, b"\x00")
+        try:
+            os.write(self._text_stop_w, b"\x00")
+        except OSError:
+            pass
 
     def listen(self) -> threading.Event:
         """Start a background thread that dispatches messages until stop().
