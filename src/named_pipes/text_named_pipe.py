@@ -84,20 +84,41 @@ class TextNamedPipe(ABC):
         line = self._msg_recv.readline().rstrip("\n")
         return json.loads(line)
 
-    def send_message(self, data: str):
+    def send_message(self, data: str, pid: int | None = None):
+        """Send *data* to one subscriber (*pid* given) or all subscribers (*pid* = None).
+
+        On the client side the *pid* parameter is ignored and the message is
+        written to the upstream pipe.
+        """
         if self._role is Role.SERVER:
-            for _, f in self._subscribers.values():
+            if pid is None:
+                for _, f in self._subscribers.values():
+                    f.write(data + "\n")
+                    f.flush()
+            else:
+                subscriber = self._subscribers.get(pid)
+                if subscriber is None:
+                    return
+                _, f = subscriber
                 f.write(data + "\n")
                 f.flush()
         else:
             self._msg_send.write(data + "\n")
             self._msg_send.flush()
 
+    def broadcast_message(self, data: str):
+        """Send *data* to all subscribers (server only convenience alias)."""
+        self.send_message(data, pid=None)
+
     # --- abstract handler ---
 
     @abstractmethod
-    def msg_handler_fn(self, msg: dict):
-        """Called for each incoming message."""
+    def msg_handler_fn(self, msg: dict, pid: int | None):
+        """Called for each incoming message.
+
+        *pid* is the sender's process ID extracted from the message (server
+        side) or ``None`` when receiving a server response on the client side.
+        """
 
     # --- listen loop ---
 
@@ -123,7 +144,8 @@ class TextNamedPipe(ABC):
                     msg = self.recv_message()
                     if not msg:
                         continue
-                    self.msg_handler_fn(msg)
+                    pid = msg.get("pid")
+                    self.msg_handler_fn(msg, pid)
             finally:
                 done.set()
 

@@ -55,7 +55,7 @@ class TestHandlerDecorator:
         tool = make_tool()
 
         @tool.handler("echo")
-        def on_echo(msg):
+        def on_echo(msg, pid):
             pass
 
         assert "echo" in tool._handlers
@@ -63,7 +63,7 @@ class TestHandlerDecorator:
     def test_returns_original_function(self):
         tool = make_tool()
 
-        def on_echo(msg):
+        def on_echo(msg, pid):
             pass
 
         result = tool.handler("echo")(on_echo)
@@ -81,16 +81,16 @@ class TestProtocolCommands:
         tool.subscribe = MagicMock()
         tool.send_response = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "subscribe", "pid": 1234})
+        tool.msg_handler_fn({"cmd": "subscribe", "pid": 1234}, 1234)
 
         tool.subscribe.assert_called_once_with(1234)
-        tool.send_response.assert_called_once_with("subscribed")
+        tool.send_response.assert_called_once_with("subscribed", 1234)
 
     def test_unsubscribe(self):
         tool = make_tool()
         tool.unsubscribe = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "unsubscribe", "pid": 1234})
+        tool.msg_handler_fn({"cmd": "unsubscribe", "pid": 1234}, 1234)
 
         tool.unsubscribe.assert_called_once_with(1234)
 
@@ -98,35 +98,37 @@ class TestProtocolCommands:
         tool = make_tool(description="My cool tool")
         tool.send_response = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "description", "pid": 1})
+        tool.msg_handler_fn({"cmd": "description", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("My cool tool")
+        tool.send_response.assert_called_once_with("My cool tool", 1)
 
     def test_help(self):
         tool = make_tool(help_text="Use me like this")
         tool.send_response = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "help", "pid": 1})
+        tool.msg_handler_fn({"cmd": "help", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("Use me like this")
+        tool.send_response.assert_called_once_with("Use me like this", 1)
 
     def test_exit(self):
         tool = make_tool()
-        tool.send_response = MagicMock()
+        tool.broadcast_message = MagicMock()
         tool.stop = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "exit", "pid": 1})
+        tool.msg_handler_fn({"cmd": "exit", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("exiting")
+        tool.broadcast_message.assert_called_once_with(
+            json.dumps({"result": "exiting"})
+        )
         tool.stop.assert_called_once()
 
     def test_unknown_command(self):
         tool = make_tool()
         tool.send_response = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "nosuch", "pid": 1})
+        tool.msg_handler_fn({"cmd": "nosuch", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("unknown command 'nosuch'")
+        tool.send_response.assert_called_once_with("unknown command 'nosuch'", 1)
 
 
 # ---------------------------------------------------------------------------
@@ -135,15 +137,15 @@ class TestProtocolCommands:
 
 
 class TestCustomDispatch:
-    def test_custom_handler_called_with_full_msg(self):
+    def test_custom_handler_called_with_msg_and_pid(self):
         tool = make_tool()
         mock_handler = MagicMock()
         tool._handlers["echo"] = mock_handler
 
         msg = {"cmd": "echo", "pid": 1, "text": "hello"}
-        tool.msg_handler_fn(msg)
+        tool.msg_handler_fn(msg, 1)
 
-        mock_handler.assert_called_once_with(msg)
+        mock_handler.assert_called_once_with(msg, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -152,13 +154,21 @@ class TestCustomDispatch:
 
 
 class TestSendHelpers:
-    def test_send_response(self):
+    def test_send_response_targeted(self):
+        tool = make_tool()
+        tool.send_message = MagicMock()
+
+        tool.send_response("ok", 42)
+
+        tool.send_message.assert_called_once_with(json.dumps({"result": "ok"}), 42)
+
+    def test_send_response_broadcast(self):
         tool = make_tool()
         tool.send_message = MagicMock()
 
         tool.send_response("ok")
 
-        tool.send_message.assert_called_once_with(json.dumps({"result": "ok"}))
+        tool.send_message.assert_called_once_with(json.dumps({"result": "ok"}), None)
 
     def test_send_command(self):
         tool = make_tool()

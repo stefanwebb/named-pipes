@@ -51,7 +51,10 @@ class ToolNamedPipe(TextNamedPipe):
     # --- decorator for custom commands ---
 
     def handler(self, cmd: str):
-        """Decorator that registers a function as the handler for *cmd*."""
+        """Decorator that registers a function as the handler for *cmd*.
+
+        The registered function must accept ``(msg: dict, pid: int | None)``.
+        """
 
         def decorator(fn):
             self._handlers[cmd.lower()] = fn
@@ -61,9 +64,9 @@ class ToolNamedPipe(TextNamedPipe):
 
     # --- sending helpers ---
 
-    def send_response(self, result: str):
-        """Broadcast ``{"result": ...}`` to all subscribers (server) or send upstream (client)."""
-        self.send_message(json.dumps({"result": result}))
+    def send_response(self, result: str, pid: int | None = None):
+        """Send ``{"result": ...}`` to *pid* (or broadcast if *pid* is None)."""
+        self.send_message(json.dumps({"result": result}), pid)
 
     def send_command(self, cmd: str):
         """Send ``{"pid": ..., "cmd": ...}`` upstream (client only)."""
@@ -71,38 +74,37 @@ class ToolNamedPipe(TextNamedPipe):
 
     # --- protocol message handler ---
 
-    def msg_handler_fn(self, msg: dict):
+    def msg_handler_fn(self, msg: dict, pid: int | None):
         cmd = msg.get("cmd", "").lower()
-        pid = msg.get("pid")
 
         match cmd:
             case "subscribe":
                 self.subscribe(pid)
-                self.send_response("subscribed")
+                self.send_response("subscribed", pid)
 
             case "unsubscribe":
                 self.unsubscribe(pid)
                 # No response per protocol spec
 
             case "description":
-                self.send_response(self._description)
+                self.send_response(self._description, pid)
 
             case "help":
-                self.send_response(self._help_text)
+                self.send_response(self._help_text, pid)
 
             case "exit":
-                self.send_response("exiting")
+                self.broadcast_message(json.dumps({"result": "exiting"}))
                 self.stop()
 
             case _:
-                self._dispatch(cmd, msg)
+                self._dispatch(cmd, msg, pid)
 
-    def _dispatch(self, cmd: str, msg: dict):
+    def _dispatch(self, cmd: str, msg: dict, pid: int | None):
         fn = self._handlers.get(cmd)
         if fn:
-            fn(msg)
+            fn(msg, pid)
         else:
-            self.send_response(f"unknown command '{cmd}'")
+            self.send_response(f"unknown command '{cmd}'", pid)
 
     # --- context manager ---
 
