@@ -24,7 +24,7 @@ def make_channel():
     with (
         patch.object(text_named_pipe, "ensure_pipe"),
         patch.object(data_named_pipe, "ensure_pipe"),
-        patch.object(text_named_pipe.os, "pipe", return_value=(10, 11)),
+        patch.object(text_named_pipe.os, "pipe", return_value=(-1, -1)),
         patch.object(text_named_pipe.os, "open", return_value=3),
         patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
     ):
@@ -190,7 +190,7 @@ class TestDataPipeSendData:
 
         with (
             patch.object(data_named_pipe, "ensure_pipe"),
-            patch.object(text_named_pipe.os, "pipe", return_value=(20, 21)),
+            patch.object(text_named_pipe.os, "pipe", return_value=(-1, -1)),
             patch.object(text_named_pipe.os, "open", return_value=4),
             patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
         ):

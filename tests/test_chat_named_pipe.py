@@ -37,7 +37,7 @@ def make_chat_pipe(backend=Backend.VLLM, reply="Hello!", **kwargs):
 
     with (
         patch.object(text_named_pipe, "ensure_pipe"),
-        patch.object(text_named_pipe.os, "pipe", return_value=(10, 11)),
+        patch.object(text_named_pipe.os, "pipe", return_value=(-1, -1)),
         patch.object(text_named_pipe.os, "open", return_value=3),
         patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
     ):
