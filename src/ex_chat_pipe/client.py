@@ -48,6 +48,11 @@ def main():
         ch.reply_received.wait()
         print(f"Response: {ch.response}")
 
+        ch.reply_received.clear()
+        ch.send_message(json.dumps({"pid": ch._pid, "cmd": "exit"}))
+        ch.reply_received.wait()
+        print(f"Response: {ch.response}")
+
 
 if __name__ == "__main__":
     main()
