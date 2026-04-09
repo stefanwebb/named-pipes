@@ -1,6 +1,6 @@
 <video src="MascotAnimation.gif" controls width="100%"></video>
 
-![Claude mascot jumps into a pipe like Super Mario](MascotAnimation.gif)
+![Claude mascot jumps into a pipe like Super Mario](MascotAnimation.mp4)
 
 # Named Pipes as Agentic Tools
 
