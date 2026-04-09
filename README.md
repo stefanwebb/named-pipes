@@ -1,5 +1,5 @@
 <div align="center">
-<img src="MascotAnimation.gif"></img>
+<img src="MascotAnimation.gif" width="100%"></img>
 </div>
 
 # Named Pipes as Agentic Tools
