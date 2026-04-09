@@ -1,5 +1,7 @@
 <video src="MascotAnimation.gif" controls width="100%"></video>
 
+![Claude mascot jumps into a pipe like Super Mario](MascotAnimation.gif)
+
 # named-pipes
 
 Low-latency interprocess communication via named pipes — lower overhead than local HTTP, simpler than shared memory.
