@@ -2,7 +2,7 @@
 
 ![Claude mascot jumps into a pipe like Super Mario](MascotAnimation.gif)
 
-# named-pipes
+# Named Pipes as Agentic Tools
 
 Low-latency interprocess communication via named pipes — lower overhead than local HTTP, simpler than shared memory.
 
