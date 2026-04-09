@@ -1,4 +1,6 @@
-![Claude mascot jumps into a pipe like Super Mario](MascotAnimation.gif)
+<div align="center">
+<img src="MascotAnimation.gif"></img>
+</div>
 
 # Named Pipes as Agentic Tools
 
