@@ -9,7 +9,17 @@ requires-python = ">=3.11"
 dependencies = ["psutil"]
 
 [project.optional-dependencies]
-llm = ["vllm", "transformers>=5.5.0", "torch"]
+llm = [
+    "vllm; sys_platform == 'linux'",
+    "mlx-lm; sys_platform == 'darwin'",
+    "transformers>=5.5.0",
+    "torch",
+]
+tts = [
+    "vllm-omni; sys_platform == 'linux'",
+    "mlx-audio; sys_platform == 'darwin'",
+    "soundfile",
+]
 dev = ["pytest", "ruff"]
 
 [tool.setuptools.packages.find]

@@ -1,3 +1,5 @@
+<video src="out/MascotAnimation.mp4" controls width="100%"></video>
+
 # named-pipes
 
 Low-latency interprocess communication via named pipes — lower overhead than local HTTP, simpler than shared memory.
