@@ -1,4 +1,4 @@
-<video src="out/MascotAnimation.mp4" controls width="100%"></video>
+<video src="MascotAnimation.gif" controls width="100%"></video>
 
 # named-pipes
 
