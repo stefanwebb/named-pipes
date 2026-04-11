@@ -6,8 +6,23 @@ Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
 ChatNamedPipe — ToolNamedPipe subclass that serves LLM chat inference.
+
+Commands
+--------
+chat
+    Streaming inference.  The server sends one ``{"result": "<chunk>",
+    "done": false}`` message per generated token (or token batch), then a
+    final ``{"result": "", "done": true}`` sentinel when generation is
+    complete.
+
+chat_blocking
+    Non-streaming inference.  The server sends a single
+    ``{"result": "<full text>"}`` message when generation is complete.
+    Equivalent to the old ``chat`` behaviour.
 """
 
+import json
+import threading
 from enum import Enum
 
 from named_pipes.tool_named_pipe import ToolNamedPipe, Role
@@ -32,11 +47,18 @@ class ChatNamedPipe(ToolNamedPipe):
     Backend libraries are imported lazily inside ``__init__`` so that the
     module can be loaded on platforms where only one backend is installed.
 
-    The ``chat`` command expects a message dict of the form::
+    ``chat`` command (streaming)::
 
         {"pid": ..., "cmd": "chat", "messages": [{"role": ..., "content": ...}, ...]}
 
-    and replies via ``send_response`` with the assistant text.
+    Replies with one or more ``{"result": "<chunk>", "done": false}`` messages
+    followed by a final ``{"result": "", "done": true}`` sentinel.
+
+    ``chat_blocking`` command (non-streaming)::
+
+        {"pid": ..., "cmd": "chat_blocking", "messages": [...]}
+
+    Replies with a single ``{"result": "<full text>"}`` message.
     """
 
     def __init__(
@@ -62,9 +84,37 @@ class ChatNamedPipe(ToolNamedPipe):
 
         @self.handler("chat")
         def on_chat(msg: dict, pid: int | None):
+            # Run inference on a separate thread so the listener loop is not
+            # blocked while tokens are being streamed back to the client.
+            # TODO: two overlapping chat requests from the same client could
+            # interleave their chunks on the downstream pipe — add per-client
+            # request sequencing in a future version.
+            messages = msg.get("messages", [])
+            threading.Thread(
+                target=self._infer_stream, args=(messages, pid), daemon=True
+            ).start()
+
+        @self.handler("chat_blocking")
+        def on_chat_blocking(msg: dict, pid: int | None):
             messages = msg.get("messages", [])
             reply = self._infer(messages)
             self.send_response(reply, pid)
+
+    # -----------------------------------------------------------------------
+    # Streaming helpers
+    # -----------------------------------------------------------------------
+
+    def _send_chunk(self, text: str, pid: int | None):
+        """Send one streaming chunk to *pid*."""
+        self.send_message(json.dumps({"result": text, "done": False}), pid)
+
+    def _send_stream_done(self, pid: int | None):
+        """Send the end-of-stream sentinel to *pid*."""
+        self.send_message(json.dumps({"result": "", "done": True}), pid)
+
+    # -----------------------------------------------------------------------
+    # Backend initialisation
+    # -----------------------------------------------------------------------
 
     def _init_vllm(self, model: str, **sampling_kwargs):
         from vllm import LLM, SamplingParams
@@ -78,9 +128,22 @@ class ChatNamedPipe(ToolNamedPipe):
 
         self._infer = infer
 
+        # vLLM's synchronous LLM class does not expose token-level streaming;
+        # fall back to returning the full response as a single chunk.
+        def infer_stream(messages, pid):
+            text = infer(messages)
+            self._send_chunk(text, pid)
+            self._send_stream_done(pid)
+
+        self._infer_stream = infer_stream
+
     def _init_transformers(self, model: str, **generation_kwargs):
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import (
+            AutoModelForCausalLM,
+            AutoTokenizer,
+            TextIteratorStreamer,
+        )
 
         if torch.backends.mps.is_available():
             device = "mps"
@@ -101,10 +164,35 @@ class ChatNamedPipe(ToolNamedPipe):
                 add_generation_prompt=True,
                 return_tensors="pt",
                 return_dict=True,
-            ).to(self._device)
+            ).to(device)
             prompt_len = encoded["input_ids"].shape[-1]
-            output_ids = self._model.generate(**encoded, **self._generation_kwargs)
+            output_ids = self._model.generate(**encoded, **generation_kwargs)
             new_tokens = output_ids[0][prompt_len:]
             return self._tokenizer.decode(new_tokens, skip_special_tokens=True)
 
         self._infer = infer
+
+        def infer_stream(messages, pid):
+            encoded = self._tokenizer.apply_chat_template(
+                messages,
+                tokenize=True,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                return_dict=True,
+            ).to(device)
+            streamer = TextIteratorStreamer(
+                self._tokenizer,
+                skip_prompt=True,
+                skip_special_tokens=True,
+            )
+            gen_kwargs = {**encoded, **generation_kwargs, "streamer": streamer}
+            thread = threading.Thread(
+                target=self._model.generate, kwargs=gen_kwargs, daemon=True
+            )
+            thread.start()
+            for chunk in streamer:
+                if chunk:
+                    self._send_chunk(chunk, pid)
+            self._send_stream_done(pid)
+
+        self._infer_stream = infer_stream
