@@ -19,7 +19,9 @@ tts = [
     "vllm-omni; sys_platform == 'linux'",
     "mlx-audio; sys_platform == 'darwin'",
     "soundfile",
+    "sounddevice",
 ]
+kokoro = ["misaki[en]"]
 dev = ["pytest", "ruff"]
 
 [tool.setuptools.packages.find]
