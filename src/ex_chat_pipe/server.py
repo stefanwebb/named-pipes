@@ -14,7 +14,7 @@ from named_pipes.chat_named_pipe import Backend, ChatNamedPipe
 
 def main():
     with ChatNamedPipe(
-        "llm",
+        "chat",
         "Qwen/Qwen3.5-0.8B",
         backend=Backend.TRANSFORMERS,
         description="Simple LLM chat server powered by Qwen3.5-0.8B.",
@@ -22,7 +22,7 @@ def main():
         do_sample=False,
     ) as ch:
         done = ch.listen()
-        print("LLM server listening on /tmp/tool-llm ...")
+        print("LLM server listening on /tmp/tool-chat ...")
         done.wait()
 
 

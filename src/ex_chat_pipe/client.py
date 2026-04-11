@@ -21,7 +21,7 @@ class _LLMClient(TextNamedPipe):
     """Minimal client for the ToolNamedPipe / ChatNamedPipe protocol."""
 
     def __init__(self):
-        super().__init__("/tmp/tool-llm", Role.CLIENT)
+        super().__init__("/tmp/tool-chat", Role.CLIENT)
         self.subscribed = threading.Event()
         self.response: str | None = None
         self.reply_received = threading.Event()
