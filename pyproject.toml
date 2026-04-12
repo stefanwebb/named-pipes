@@ -24,5 +24,8 @@ tts = [
 kokoro = ["misaki[en]"]
 dev = ["pytest", "ruff"]
 
+[project.scripts]
+cpipe = "named_pipes.cpipe:main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
