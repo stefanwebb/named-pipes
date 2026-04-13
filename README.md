@@ -6,7 +6,7 @@
 
 **This library uses named pipes as the transport layer for agentic tool servers — persistent background processes that expose capabilities such as LLM inference, text-to-speech, vector search, or browser automation to a Python orchestrator running on the same machine.**
 
-Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory, making them a practical sweet spot for real-time applications like voice agents. Unlike MCP, which is designed for tool calls from a remote or cloud-hosted model and carries the overhead of JSON-RPC over stdio or SSE, named pipes are a purely local, binary-capable channel that keeps the orchestrator fully in control of the execution loop — no server discovery protocol, no process spawning by the framework, and no round-trip through an intermediary.
+Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory, making them a practical sweet spot for real-time applications like voice agents.
 
 Each tool server stays resident between calls, so it holds model weights, database indexes, or browser state in memory rather than reloading them on every request. A thin client-side abstraction handles the subscribe/send/receive/unsubscribe lifecycle, and a `cpipe` command-line utility lets you send ad-hoc commands to any running server from the terminal.
 
@@ -20,6 +20,12 @@ A named pipe (FIFO) is a special file in the filesystem that acts as a one-way c
 
 - **Statefulness**: The tool runs as a persistent process with in-memory state, unlike a CLI that must reload state from disk or an API on every invocation.
 - **Low latency**: Named pipes are the fastest IPC mechanism after shared memory — critical for real-time applications like voice agents.
+
+## Why not CLI or MCP?
+
+A CLI tool is a new process on every invocation. It pays startup cost each time, must reload any state it needs from disk, and exits when the call completes. For lightweight commands that is fine, but for capabilities like LLM inference, vector search, or browser automation — where the expensive part is loading model weights, building an index, or launching a browser — that per-call overhead is prohibitive. A named-pipe server starts once, holds everything in memory, and stays resident between calls. The orchestrator sends a message and gets a response; no process is spawned, no state is reloaded.
+
+MCP is built around a different assumption: the model lives elsewhere (in the cloud, behind an API), and tools run as local or remote servers that the framework discovers and manages. That architecture introduces JSON-RPC framing, a process-spawning and discovery protocol, and a framework intermediary sitting between the model and the tool. For a self-hosted agent running entirely on one machine, all of that is overhead with no benefit. Named pipes skip the protocol layer entirely — the orchestrator opens a file path, writes a message, and reads the reply. The execution loop stays in the orchestrator's hands, with no framework in the middle and no network stack involved.
 
 ## Example tools
 - LLM inference server
