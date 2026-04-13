@@ -95,6 +95,7 @@ class _CpipeClient(TextNamedPipe):
         super().__init__(pipe_name, Role.CLIENT)
         self.subscribed = threading.Event()
         self.response_received = threading.Event()
+        self.streaming = threading.Event()  # set on first streamed chunk
 
     def msg_handler_fn(self, msg: dict, pid: int | None):
         # --- subscribe acknowledgements ---
@@ -117,6 +118,7 @@ class _CpipeClient(TextNamedPipe):
 
         # In-flight chunk: {"result": "<token>", "done": false}
         if "done" in msg:
+            self.streaming.set()
             print(msg.get("result", ""), end="", flush=True)
             return
 
@@ -372,15 +374,21 @@ Examples:
             if not args.no_wait:
                 received = client.response_received.wait(timeout=args.timeout)
                 if not received:
-                    print("\ncpipe: timed out waiting for response", file=sys.stderr)
-                    # Best-effort unsubscribe before exiting
-                    if do_subscribe:
-                        try:
-                            unsub = json.dumps({"pid": pid, "cmd": "unsubscribe"})
-                            client.send_message(unsub)
-                        except OSError:
-                            pass
-                    sys.exit(1)
+                    if client.streaming.is_set():
+                        # Streaming already started — wait indefinitely for done.
+                        client.response_received.wait()
+                    else:
+                        print(
+                            "\ncpipe: timed out waiting for response", file=sys.stderr
+                        )
+                        # Best-effort unsubscribe before exiting
+                        if do_subscribe:
+                            try:
+                                unsub = json.dumps({"pid": pid, "cmd": "unsubscribe"})
+                                client.send_message(unsub)
+                            except OSError:
+                                pass
+                        sys.exit(1)
 
             # ----------------------------------------------------------------
             # Unsubscribe
