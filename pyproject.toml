@@ -29,3 +29,6 @@ cpipe = "named_pipes.cpipe:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff.lint]
+unfixable = ["F401"]
