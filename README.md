@@ -6,7 +6,7 @@
 
 **This library uses named pipes as the transport layer for agentic tool servers — persistent background processes that expose capabilities such as LLM inference, text-to-speech, vector search, or browser automation to a Python orchestrator running on the same machine.**
 
-Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory, making them a practical sweet spot for real-time applications like voice agents.
+Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory, making them a practical sweet spot for real-time applications like voice agents. Unlike MCP, which is designed for tool calls from a remote or cloud-hosted model and carries the overhead of JSON-RPC over stdio or SSE, named pipes are a purely local, binary-capable channel that keeps the orchestrator fully in control of the execution loop — no server discovery protocol, no process spawning by the framework, and no round-trip through an intermediary.
 
 Each tool server stays resident between calls, so it holds model weights, database indexes, or browser state in memory rather than reloading them on every request. A thin client-side abstraction handles the subscribe/send/receive/unsubscribe lifecycle, and a `cpipe` command-line utility lets you send ad-hoc commands to any running server from the terminal.
 
