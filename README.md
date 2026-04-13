@@ -4,16 +4,29 @@
 
 # Named Pipes as Agentic Tools
 
-Low-latency interprocess communication via named pipes — lower overhead than local HTTP, simpler than shared memory.
+**This library uses named pipes as the transport layer for agentic tool servers — persistent background processes that expose capabilities such as LLM inference, text-to-speech, vector search, or browser automation to a Python orchestrator running on the same machine.**
 
-Built as a foundation for agent/service architectures where a Python orchestrator talks to multiple specialized servers (LLM inference, STT, TTS, vector DBs, etc.) on the same machine.
+Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory, making them a practical sweet spot for real-time applications like voice agents.
 
-## Why Named Pipes?
+Each tool server stays resident between calls, so it holds model weights, database indexes, or browser state in memory rather than reloading them on every request. A thin client-side abstraction handles the subscribe/send/receive/unsubscribe lifecycle, and a `cpipe` command-line utility lets you send ad-hoc commands to any running server from the terminal.
+
+The same servers can also be driven directly from Claude Code or another agentic coding tool. An included agent skill teaches the assistant how to discover running pipe servers with `cpipe --list`, inspect their capabilities, and send commands — so the LLM can query a local inference server or trigger TTS playback without leaving the coding session.
+
+## What are named pipes?
+
+A named pipe (FIFO) is a special file in the filesystem that acts as a one-way channel between two processes: one process writes to it, the other reads from it. Unlike anonymous pipes (`|` in a shell), named pipes have a path on disk, so unrelated processes can open them by name without a parent–child relationship. On Linux and macOS they are created with `mkfifo` and live under `/tmp` (or anywhere else on the filesystem). Data flows through kernel memory — no disk I/O — making them fast and simple for same-machine IPC.
+
+## Why named pipes?
 
 - **Statefulness**: The tool runs as a persistent process with in-memory state, unlike a CLI that must reload state from disk or an API on every invocation.
 - **Low latency**: Named pipes are the fastest IPC mechanism after shared memory — critical for real-time applications like voice agents.
 
-**Example tools**: LLM inference server, STT/TTS streaming server, in-memory key-value store, vector database, browser automation server.
+## Example tools
+- LLM inference server
+- STT/TTS streaming server
+- in-memory key-value store
+- vector/graph database
+- browser automation server.
 
 ## Installation
 
