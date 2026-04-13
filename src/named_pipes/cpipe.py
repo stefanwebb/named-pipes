@@ -15,6 +15,77 @@ import sys
 import threading
 
 from named_pipes.text_named_pipe import Role, TextNamedPipe
+from named_pipes.utils import scan_pipes
+
+
+def _print_scan_result(root: str, result: dict, show_pids: bool) -> None:
+    connected = result["connected"]
+    orphaned = result["orphaned"]
+    total = len(connected) + len(orphaned)
+
+    if total == 0:
+        print(f"No named pipes found under {root!r}.")
+        return
+
+    print(
+        f"Scanning {root!r} — {total} pipe(s): "
+        f"{len(connected)} connected, {len(orphaned)} orphaned.\n"
+    )
+
+    if connected:
+        print("Connected (open by a process):")
+        for entry in connected:
+            if show_pids and entry["pids"]:
+                pids_str = ", ".join(str(p) for p in entry["pids"])
+                print(f"  {entry['path']}  [pids: {pids_str}]")
+            else:
+                print(f"  {entry['path']}")
+        print()
+
+    if orphaned:
+        print("Orphaned (no process has these open):")
+        for path in orphaned:
+            print(f"  {path}")
+    else:
+        print("No orphaned pipes found.")
+
+
+def _list_pipes(root: str = "/tmp") -> None:
+    """Print connected/orphaned pipes (fast O_WRONLY probe, no process scan)."""
+    _print_scan_result(root, scan_pipes(root), show_pids=False)
+
+
+def _pid_pipes(root: str = "/tmp") -> None:
+    """Print connected pipes with PIDs and orphaned pipes (full process scan)."""
+    _print_scan_result(root, scan_pipes(root, with_pids=True), show_pids=True)
+
+
+def _clear_pipes(root: str = "/tmp") -> None:
+    """Delete orphaned named pipes under *root*."""
+    result = scan_pipes(root)
+    orphaned = result["orphaned"]
+
+    if not orphaned:
+        print(f"No orphaned pipes found under {root!r}.")
+        return
+
+    deleted, failed = [], []
+    for path in orphaned:
+        try:
+            os.remove(path)
+            deleted.append(path)
+        except OSError as exc:
+            failed.append((path, exc))
+
+    if deleted:
+        print(f"Deleted {len(deleted)} orphaned pipe(s):")
+        for path in deleted:
+            print(f"  {path}")
+
+    if failed:
+        print(f"\nFailed to delete {len(failed)} pipe(s):", file=sys.stderr)
+        for path, exc in failed:
+            print(f"  {path}: {exc}", file=sys.stderr)
 
 
 class _CpipeClient(TextNamedPipe):
@@ -87,6 +158,12 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
+  cpipe --list                                 list all named pipes under /tmp
+  cpipe --list /var/tmp                        list named pipes under /var/tmp
+  cpipe --pid                                  list pipes with PIDs under /tmp
+  cpipe --pid /var/tmp                         list pipes with PIDs under /var/tmp
+  cpipe --clear                                delete orphaned pipes under /tmp
+  cpipe --clear /var/tmp                       delete orphaned pipes under /var/tmp
   cpipe chat description                       get tool description
   cpipe /tmp/tool-chat help                    get help text
   cpipe chat exit                              shut down the server
@@ -100,11 +177,13 @@ Examples:
     parser.add_argument(
         "pipe",
         metavar="PIPE",
+        nargs="?",
         help="pipe path (/tmp/tool-chat) or bare tool name (chat)",
     )
     parser.add_argument(
         "cmd",
         metavar="CMD",
+        nargs="?",
         help="command to send (e.g. description, help, ping)",
     )
     parser.add_argument(
@@ -161,7 +240,46 @@ Examples:
         action="store_true",
         help="print sent messages and status to stderr",
     )
+    parser.add_argument(
+        "--list",
+        metavar="DIR",
+        nargs="?",
+        const="/tmp",
+        help="list all named pipes under DIR (default: /tmp); fast, no process scan",
+    )
+    parser.add_argument(
+        "--pid",
+        metavar="DIR",
+        nargs="?",
+        const="/tmp",
+        help="list named pipes with PIDs under DIR (default: /tmp); slower, full scan",
+    )
+    parser.add_argument(
+        "--clear",
+        metavar="DIR",
+        nargs="?",
+        const="/tmp",
+        help="delete orphaned named pipes under DIR (default: /tmp)",
+    )
     args = parser.parse_args(argv)
+
+    # --list, --pid, and --clear are standalone modes; PIPE and CMD are not required.
+    if args.list is not None:
+        _list_pipes(args.list)
+        return
+
+    if args.pid is not None:
+        _pid_pipes(args.pid)
+        return
+
+    if args.clear is not None:
+        _clear_pipes(args.clear)
+        return
+
+    if not args.pipe or not args.cmd:
+        parser.error(
+            "PIPE and CMD are required unless --list, --pid, or --clear is given"
+        )
 
     pipe, auto_tool = _resolve_pipe(args.pipe)
 
@@ -271,7 +389,9 @@ Examples:
                 if use_tool_protocol:
                     unsub_msg = json.dumps({"pid": pid, "cmd": "unsubscribe"})
                 else:
-                    unsub_msg = json.dumps({"cmd": "UNSUBSCRIBE", "data": "", "pid": pid})
+                    unsub_msg = json.dumps(
+                        {"cmd": "UNSUBSCRIBE", "data": "", "pid": pid}
+                    )
                 _log(f"-> {unsub_msg}")
                 try:
                     client.send_message(unsub_msg)

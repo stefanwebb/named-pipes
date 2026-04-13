@@ -11,9 +11,11 @@ See named-pipe-tools.md for the full specification.
 """
 
 import json
+import os
 from pathlib import Path
 
 from named_pipes.text_named_pipe import TextNamedPipe, Role
+from named_pipes.utils import scan_pipes
 
 
 class ToolNamedPipe(TextNamedPipe):
@@ -47,6 +49,20 @@ class ToolNamedPipe(TextNamedPipe):
             help_text = skill_md.read_text() if skill_md.exists() else description
         self._help_text = help_text
         self._handlers: dict[str, callable] = {}
+
+        # On startup, remove orphaned tool pipes left by crashed servers/clients.
+        # Only the server owns pipes in the directory; clients create their own
+        # downstream pipe via TextNamedPipe and clean it up themselves.
+        if role is Role.SERVER:
+            folder = str(Path(pipe_name).parent)
+            tool_prefix = os.path.join(folder, "tool-")
+            result = scan_pipes(folder)
+            for orphan in result["orphaned"]:
+                if orphan.startswith(tool_prefix) and orphan != pipe_name:
+                    try:
+                        os.remove(orphan)
+                    except OSError:
+                        pass
 
     # --- decorator for custom commands ---
 
