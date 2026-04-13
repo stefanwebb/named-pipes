@@ -24,11 +24,17 @@ pip install -e .
 # With LLM inference support
 pip install -e ".[llm]"
 
+# With TTS support (macOS: mlx-audio + sounddevice)
+pip install -e ".[tts]"
+
+# With Kokoro phonemiser (English misaki frontend)
+pip install -e ".[kokoro]"
+
 # With dev tools
 pip install -e ".[dev]"
 ```
 
-Requires Python 3.11+. LLM extras: `vllm`, `transformers>=5.5.0`, `torch`.
+Requires Python 3.11+. LLM extras (macOS): `mlx-lm`, `transformers>=5.5.0`, `torch`. LLM extras (Linux): `vllm`, `transformers>=5.5.0`, `torch`. TTS extras (macOS): `mlx-audio`, `sounddevice`.
 
 ## Overview
 
@@ -38,8 +44,8 @@ The library builds a hierarchy of abstractions over named pipes, from low-level 
 TextNamedPipe (ABC)       DataNamedPipe (ABC)
        ↓              ↘          ↓
 ToolNamedPipe          BasicPipeChannel (text + data)
-       ↓
-ChatNamedPipe
+       ↓         ↘
+ChatNamedPipe   TTSNamedPipe
 ```
 
 ### TextNamedPipe and DataNamedPipe
@@ -83,16 +89,21 @@ The full protocol specification is in [`named-pipe-tools.md`](named-pipe-tools.m
 
 ### ChatNamedPipe
 
-`ChatNamedPipe` inherits from `ToolNamedPipe` and implements an LLM inference tool. It registers a `chat` command that accepts an OpenAI-style message list and returns the assistant's reply. Two backends are supported:
+`ChatNamedPipe` inherits from `ToolNamedPipe` and implements an LLM inference tool. It registers two commands:
 
-- **`Backend.TRANSFORMERS`** — HuggingFace Transformers; device is auto-detected (MPS / CUDA / CPU)
-- **`Backend.VLLM`** — vLLM for higher-throughput serving
+- **`chat`** — streaming inference; sends token chunks as they are generated, followed by a `done: true` sentinel
+- **`chat_blocking`** — non-streaming inference; returns the full reply in one message
+
+Two backends are supported:
+
+- **`Backend.TRANSFORMERS`** — HuggingFace Transformers with `TextIteratorStreamer`; device is auto-detected (MPS / CUDA / CPU)
+- **`Backend.VLLM`** — vLLM for higher-throughput serving (Linux)
 
 ```python
 from named_pipes.chat_named_pipe import Backend, ChatNamedPipe
 
 with ChatNamedPipe(
-    "llm",
+    "chat",
     "Qwen/Qwen3.5-0.8B",
     backend=Backend.TRANSFORMERS,
     description="Simple LLM chat server powered by Qwen3.5-0.8B.",
@@ -100,11 +111,57 @@ with ChatNamedPipe(
     do_sample=False,
 ) as ch:
     done = ch.listen()
-    print("LLM server listening on /tmp/tool-llm ...")
+    print("LLM server listening on /tmp/tool-chat ...")
     done.wait()
 ```
 
 See [`src/ex_chat_pipe/`](src/ex_chat_pipe/) for a working client/server example.
+
+### TTSNamedPipe
+
+`TTSNamedPipe` inherits from `ToolNamedPipe` and implements a real-time text-to-speech tool. It accumulates incoming text tokens, splits on sentence boundaries (`. ! ?`), and synthesises each sentence as audio played through the system speakers. Synthesis and playback run on background threads so the pipe stays responsive during generation.
+
+Backend: [mlx-audio](https://github.com/Blaizzy/mlx-audio) with the Kokoro-82M model (macOS / Apple Silicon).
+
+Commands (in addition to `ToolNamedPipe` builtins):
+
+| Command | Data | Description |
+|---------|------|-------------|
+| `text` | token string | Append tokens to the text buffer; flush automatically at sentence boundaries |
+| `flush` | — | Force-synthesise whatever remains in the buffer (call at end of generation) |
+
+```python
+from named_pipes.tts_named_pipe import TTSNamedPipe
+
+with TTSNamedPipe("tts") as ch:
+    done = ch.listen()
+    print("TTS server listening on /tmp/tool-tts ...")
+    done.wait()
+```
+
+See [`src/ex_tts_pipe/`](src/ex_tts_pipe/) for a working server example and [`src/ex_tts_pipe/`](src/ex_tts_pipe/client.py) for the LLM→TTS pipeline client that streams LLM tokens directly into the TTS server in real time.
+
+## cpipe — CLI for named-pipe servers
+
+`cpipe` is installed as a console script and lets you send commands to any named-pipe tool server from the terminal, like `curl` for pipes.
+
+```bash
+# Send a command (subscribe → send → wait for response → unsubscribe)
+cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
+
+# Discover running pipe servers
+cpipe --list            # connected / orphaned pipes under /tmp
+cpipe --pid             # same, plus the PIDs that have each pipe open
+cpipe --clear           # delete orphaned (no process has open) pipes
+
+# Options
+cpipe --timeout 30      # seconds to wait for response (default: 10)
+cpipe --no-subscribe    # skip subscribe/unsubscribe handshake
+cpipe --no-wait         # fire and forget
+cpipe -v                # verbose: print sent/received messages to stderr
+```
+
+See [`.claude/skills/named-pipe-tools/SKILL.md`](.claude/skills/named-pipe-tools/SKILL.md) for the skill that teaches Claude Code how to use `cpipe` to interact with live servers.
 
 ## Running the examples
 
@@ -115,9 +172,17 @@ See [`src/ex_chat_pipe/`](src/ex_chat_pipe/) for a working client/server example
 conda activate named-pipes
 python src/ex_chat_pipe/server.py
 
-# LLM client (Terminal 2)
+# LLM client — streaming + blocking demo (Terminal 2)
 conda activate named-pipes
 python src/ex_chat_pipe/client.py
+```
+
+```bash
+# LLM→TTS pipeline (three terminals)
+conda activate named-pipes
+python src/ex_chat_pipe/server.py   # Terminal 1: LLM server  (/tmp/tool-chat)
+python src/ex_tts_pipe/server.py    # Terminal 2: TTS server  (/tmp/tool-tts)
+python src/ex_tts_pipe/client.py    # Terminal 3: pipeline client (streams LLM tokens → TTS)
 ```
 
 ```bash
