@@ -1,9 +1,9 @@
 """
-Streaming microphone → Whisper transcription using mlx-audio + Silero VAD.
+Streaming microphone → Voxtral Realtime transcription using mlx-audio + Silero VAD.
 
 Silero VAD (a small neural network) detects speech frames, replacing the
 manual RMS threshold with a learned speech/silence classifier. Speech
-segments are flushed to Whisper at each speech-end event.
+segments are flushed to the STT model at each speech-end event.
 
 Requirements:
     pip install mlx-audio sounddevice numpy torch
@@ -21,7 +21,8 @@ from mlx_audio.stt import load
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MODEL_ID = "mlx-community/whisper-large-v3-turbo-asr-fp16"
+# MODEL_ID = "mlx-community/whisper-large-v3-turbo-asr-fp16"
+MODEL_ID = "mlx-community/Voxtral-Mini-4B-Realtime-2602-4bit"
 SAMPLE_RATE = 16_000  # Whisper and Silero both expect 16 kHz mono
 VAD_CHUNK = 512  # Silero's recommended window size at 16 kHz (32 ms)
 MIN_SPEECH_SECONDS = 0.5  # discard segments shorter than this
@@ -41,10 +42,10 @@ def _mic_callback(indata: np.ndarray, _frames, _time, status: sd.CallbackFlags) 
     audio_queue.put(indata[:, 0].copy())  # mono float32
 
 
-def _transcription_loop(whisper_model, vad_iterator) -> None:
+def _transcription_loop(stt_model, vad_iterator) -> None:
     """
     Feed mic chunks through Silero VAD. Buffer audio while speech is active
-    and send the accumulated segment to Whisper on each speech-end event.
+    and send the accumulated segment to Voxtral on each speech-end event.
     """
     speech_buffer: list[np.ndarray] = []
     in_speech = False
@@ -67,16 +68,10 @@ def _transcription_loop(whisper_model, vad_iterator) -> None:
                 segment = np.concatenate(speech_buffer)
 
                 if segment.size >= _MIN_SPEECH_SAMPLES:
-                    result = whisper_model.generate(
-                        segment, language="en", verbose=None
-                    )
-                    text = (
-                        result.text.strip()
-                        if hasattr(result, "text")
-                        else str(result).strip()
-                    )
-                    if text:
-                        print(text, flush=True)
+                    # Print tokens progressively as Voxtral decodes them.
+                    for token in stt_model.generate(segment, stream=True):
+                        print(token, end="", flush=True)
+                    print()
 
                 speech_buffer = []
 
@@ -100,18 +95,16 @@ vad_iterator = VADIterator(
     speech_pad_ms=200,  # padding added around each speech segment
 )
 
-print("Loading Whisper model…")
-whisper_model = load(MODEL_ID)
+print("Loading Voxtral model…")
+stt_model = load(MODEL_ID)
 
-# Warm up Whisper — avoids a long pause before the first real transcription.
-_ = whisper_model.generate(
-    np.zeros(SAMPLE_RATE, dtype=np.float32), language="en", verbose=None
-)
+# Warm up — avoids a long pause before the first real transcription.
+_ = list(stt_model.generate(np.zeros(SAMPLE_RATE, dtype=np.float32), stream=True))
 
 print("Listening… speak naturally and pause to transcribe. Ctrl+C to stop.\n")
 
 transcriber = threading.Thread(
-    target=_transcription_loop, args=(whisper_model, vad_iterator), daemon=True
+    target=_transcription_loop, args=(stt_model, vad_iterator), daemon=True
 )
 transcriber.start()
 
