@@ -35,6 +35,10 @@ _MIN_SPEECH_SAMPLES = int(MIN_SPEECH_SECONDS * SAMPLE_RATE)
 audio_queue: queue.Queue[np.ndarray | None] = queue.Queue()
 
 
+def on_speech_start() -> None:
+    print("Speaking started...", flush=True)
+
+
 def _mic_callback(indata: np.ndarray, _frames, _time, status: sd.CallbackFlags) -> None:
     """sounddevice input callback — runs on the audio thread."""
     if status:
@@ -62,6 +66,7 @@ def _transcription_loop(stt_model, vad_iterator) -> None:
             if "start" in event:
                 in_speech = True
                 speech_buffer = []
+                on_speech_start()
 
             elif "end" in event and in_speech:
                 in_speech = False
@@ -69,7 +74,9 @@ def _transcription_loop(stt_model, vad_iterator) -> None:
 
                 if segment.size >= _MIN_SPEECH_SAMPLES:
                     # Print tokens progressively as Voxtral decodes them.
-                    for token in stt_model.generate(segment, transcription_delay_ms=240, stream=True):
+                    for token in stt_model.generate(
+                        segment, transcription_delay_ms=240, stream=True
+                    ):
                         print(token, end="", flush=True)
                     print()
 
