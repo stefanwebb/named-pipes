@@ -39,6 +39,10 @@ def on_speech_start() -> None:
     print("Speaking started...", flush=True)
 
 
+def on_speech_end() -> None:
+    print("Speaking ended...", flush=True)
+
+
 def _mic_callback(indata: np.ndarray, _frames, _time, status: sd.CallbackFlags) -> None:
     """sounddevice input callback — runs on the audio thread."""
     if status:
@@ -70,6 +74,7 @@ def _transcription_loop(stt_model, vad_iterator) -> None:
 
             elif "end" in event and in_speech:
                 in_speech = False
+                on_speech_end()
                 segment = np.concatenate(speech_buffer)
 
                 if segment.size >= _MIN_SPEECH_SAMPLES:
