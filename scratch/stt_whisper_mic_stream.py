@@ -1,12 +1,12 @@
 """
-Streaming microphone → Whisper transcription using mlx-audio.
+Streaming microphone → Whisper transcription using mlx-audio + Silero VAD.
 
-Audio is buffered continuously and sent to Whisper only when a silence gap
-is detected, so each transcribed segment aligns with a natural speech pause
-rather than a fixed-length window.
+Silero VAD (a small neural network) detects speech frames, replacing the
+manual RMS threshold with a learned speech/silence classifier. Speech
+segments are flushed to Whisper at each speech-end event.
 
 Requirements:
-    pip install mlx-audio sounddevice numpy
+    pip install mlx-audio sounddevice numpy torch
 """
 
 import queue
@@ -14,6 +14,7 @@ import threading
 
 import numpy as np
 import sounddevice as sd
+import torch
 
 from mlx_audio.stt import load
 
@@ -21,18 +22,14 @@ from mlx_audio.stt import load
 # Configuration
 # ---------------------------------------------------------------------------
 MODEL_ID = "mlx-community/whisper-large-v3-turbo-asr-fp16"
-SAMPLE_RATE = 16_000  # Whisper expects 16 kHz mono
-SILENCE_THRESHOLD = 0.02  # RMS below this level is considered silence
-SILENCE_SECONDS = 0.8  # pause this long triggers transcription
-MIN_SPEECH_SECONDS = (
-    0.3  # minimum loud frames required to transcribe (raise if hallucinating)
-)
+SAMPLE_RATE = 16_000  # Whisper and Silero both expect 16 kHz mono
+VAD_CHUNK = 512  # Silero's recommended window size at 16 kHz (32 ms)
+MIN_SPEECH_SECONDS = 0.5  # discard segments shorter than this
 
-_SILENCE_FRAMES = int(SILENCE_SECONDS * SAMPLE_RATE)
-_MIN_SPEECH_FRAMES = int(MIN_SPEECH_SECONDS * SAMPLE_RATE)
+_MIN_SPEECH_SAMPLES = int(MIN_SPEECH_SECONDS * SAMPLE_RATE)
 
 # ---------------------------------------------------------------------------
-# Shared state between mic callback and transcription thread
+# Shared state
 # ---------------------------------------------------------------------------
 audio_queue: queue.Queue[np.ndarray | None] = queue.Queue()
 
@@ -44,37 +41,35 @@ def _mic_callback(indata: np.ndarray, _frames, _time, status: sd.CallbackFlags) 
     audio_queue.put(indata[:, 0].copy())  # mono float32
 
 
-def _transcription_loop(model) -> None:
+def _transcription_loop(whisper_model, vad_iterator) -> None:
     """
-    Drain the audio queue.  Accumulate samples into a speech buffer and flush
-    it to Whisper whenever a long enough silence follows audible speech.
-    Only transcribe if the buffer contains enough genuinely loud frames —
-    this prevents Whisper hallucinations on near-silent ambient noise.
+    Feed mic chunks through Silero VAD. Buffer audio while speech is active
+    and send the accumulated segment to Whisper on each speech-end event.
     """
-    speech_buffer = np.zeros(0, dtype=np.float32)
-    silent_frames = 0
-    loud_frames = 0  # frames whose RMS was >= SILENCE_THRESHOLD
+    speech_buffer: list[np.ndarray] = []
+    in_speech = False
 
     while True:
         chunk = audio_queue.get()
         if chunk is None:
             break
 
-        rms = float(np.sqrt(np.mean(chunk**2)))
+        tensor = torch.from_numpy(chunk)
+        event = vad_iterator(tensor)
 
-        if rms >= SILENCE_THRESHOLD:
-            speech_buffer = np.concatenate([speech_buffer, chunk])
-            loud_frames += len(chunk)
-            silent_frames = 0
-        else:
-            speech_buffer = np.concatenate([speech_buffer, chunk])
-            silent_frames += len(chunk)
+        if event is not None:
+            if "start" in event:
+                in_speech = True
+                speech_buffer = []
 
-            if silent_frames >= _SILENCE_FRAMES:
-                if loud_frames >= _MIN_SPEECH_FRAMES:
-                    segment = speech_buffer.copy()
+            elif "end" in event and in_speech:
+                in_speech = False
+                segment = np.concatenate(speech_buffer)
 
-                    result = model.generate(segment, language="en", verbose=None)
+                if segment.size >= _MIN_SPEECH_SAMPLES:
+                    result = whisper_model.generate(
+                        segment, language="en", verbose=None
+                    )
                     text = (
                         result.text.strip()
                         if hasattr(result, "text")
@@ -83,24 +78,41 @@ def _transcription_loop(model) -> None:
                     if text:
                         print(text, flush=True)
 
-                # Reset regardless — discard noise-only buffers silently.
-                speech_buffer = np.zeros(0, dtype=np.float32)
-                silent_frames = 0
-                loud_frames = 0
+                speech_buffer = []
+
+        if in_speech:
+            speech_buffer.append(chunk)
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-print("Loading Whisper model…")
-model = load(MODEL_ID)
+print("Loading Silero VAD…")
+vad_model, utils = torch.hub.load(
+    "snakers4/silero-vad", "silero_vad", force_reload=False, verbose=False
+)
+VADIterator = utils[3]
+vad_iterator = VADIterator(
+    vad_model,
+    threshold=0.5,
+    sampling_rate=SAMPLE_RATE,
+    min_silence_duration_ms=600,  # pause this long triggers speech-end
+    speech_pad_ms=200,  # padding added around each speech segment
+)
 
-# Warm up — avoids a long pause before the first real transcription.
-_ = model.generate(np.zeros(SAMPLE_RATE, dtype=np.float32), language="en", verbose=None)
+print("Loading Whisper model…")
+whisper_model = load(MODEL_ID)
+
+# Warm up Whisper — avoids a long pause before the first real transcription.
+_ = whisper_model.generate(
+    np.zeros(SAMPLE_RATE, dtype=np.float32), language="en", verbose=None
+)
 
 print("Listening… speak naturally and pause to transcribe. Ctrl+C to stop.\n")
 
-transcriber = threading.Thread(target=_transcription_loop, args=(model,), daemon=True)
+transcriber = threading.Thread(
+    target=_transcription_loop, args=(whisper_model, vad_iterator), daemon=True
+)
 transcriber.start()
 
 try:
@@ -108,6 +120,7 @@ try:
         samplerate=SAMPLE_RATE,
         channels=1,
         dtype="float32",
+        blocksize=VAD_CHUNK,  # deliver exactly one VAD window per callback
         callback=_mic_callback,
     ):
         threading.Event().wait()  # block until Ctrl+C
