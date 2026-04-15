@@ -69,7 +69,7 @@ def _transcription_loop(stt_model, vad_iterator) -> None:
 
                 if segment.size >= _MIN_SPEECH_SAMPLES:
                     # Print tokens progressively as Voxtral decodes them.
-                    for token in stt_model.generate(segment, stream=True):
+                    for token in stt_model.generate(segment, transcription_delay_ms=240, stream=True):
                         print(token, end="", flush=True)
                     print()
 
