@@ -21,6 +21,7 @@ tts = [
     "soundfile",
     "sounddevice",
 ]
+stt = ["sounddevice"]
 kokoro = ["misaki[en]"]
 dev = ["pytest", "ruff"]
 
