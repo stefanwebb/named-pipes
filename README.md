@@ -2,37 +2,33 @@
 <img src="MascotAnimation.gif" width="100%"></img>
 </div>
 
-# Named Pipes as Agentic Tools
+<h1 align="center">Named Pipes as Agentic Tools</h1>
 
-**This library uses named pipes as the transport layer for agentic tool servers — persistent background processes that expose capabilities such as LLM inference, text-to-speech, vector search, or browser automation to a Python orchestrator running on the same machine.**
+<p align="center">
+Low-latency IPC for persistent AI tool servers — LLM inference, TTS, STT, vector search, and more — all on one machine, no network stack required.
+</p>
 
-Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory, making them a practical sweet spot for real-time applications like voice agents.
+---
 
-Each tool server stays resident between calls, so it holds model weights, database indexes, or browser state in memory rather than reloading them on every request. A thin client-side abstraction handles the subscribe/send/receive/unsubscribe lifecycle, and a `cpipe` command-line utility lets you send ad-hoc commands to any running server from the terminal.
+## ✨ Highlights
 
-The same servers can also be driven directly from Claude Code or another agentic coding tool. An included agent skill teaches the assistant how to discover running pipe servers with `cpipe --list`, inspect their capabilities, and send commands — so the LLM can query a local inference server or trigger TTS playback without leaving the coding session.
+- **Persistent servers** — model weights and state stay loaded between calls; no per-request startup cost
+- **Kernel-speed IPC** — named pipes route through kernel memory, not a network stack; lower latency than local HTTP
+- **Multi-client fanout** — one server handles many concurrent clients; each gets its own downstream pipe
+- **Decorator API** — register command handlers with a single `@ch.handler("CMD")` line
+- **`cpipe` CLI** — send ad-hoc commands to any running server from the terminal, like `curl` for pipes
+- **Claude Code skill** — an included skill teaches the assistant to discover and query live servers without leaving the session
+- **Ready-made servers** — drop-in pipes for LLM chat, text-to-speech, and speech-to-text
 
-## What are named pipes?
+## Overview
 
-A named pipe (FIFO) is a special file in the filesystem that acts as a one-way channel between two processes: one process writes to it, the other reads from it. Unlike anonymous pipes (`|` in a shell), named pipes have a path on disk, so unrelated processes can open them by name without a parent–child relationship. On Linux and macOS they are created with `mkfifo` and live under `/tmp` (or anywhere else on the filesystem). Data flows through kernel memory — no disk I/O — making them fast and simple for same-machine IPC.
+This library uses named pipes as the transport layer for **agentic tool servers** — persistent background processes that expose capabilities such as LLM inference, text-to-speech, vector search, or browser automation to a Python orchestrator running on the same machine.
 
-## Why named pipes?
+Because named pipes route data through kernel memory rather than a network stack, they offer lower latency than local HTTP and far less complexity than shared memory — a practical sweet spot for real-time applications like voice agents.
 
-- **Statefulness**: The tool runs as a persistent process with in-memory state, unlike a CLI that must reload state from disk or an API on every invocation.
-- **Low latency**: Named pipes are the fastest IPC mechanism after shared memory — critical for real-time applications like voice agents.
+The same servers can be driven directly from Claude Code. An included agent skill teaches the assistant how to discover running pipe servers with `cpipe --list`, inspect their capabilities, and send commands.
 
-## Why not CLI or MCP?
-
-A CLI tool is a new process on every invocation. It pays startup cost each time, must reload any state it needs from disk, and exits when the call completes. For lightweight commands that is fine, but for capabilities like LLM inference, vector search, or browser automation — where the expensive part is loading model weights, building an index, or launching a browser — that per-call overhead is prohibitive. A named-pipe server starts once, holds everything in memory, and stays resident between calls. The orchestrator sends a message and gets a response; no process is spawned, no state is reloaded.
-
-MCP is built around a different assumption: the model lives elsewhere (in the cloud, behind an API), and tools run as local or remote servers that the framework discovers and manages. That architecture introduces JSON-RPC framing, a process-spawning and discovery protocol, and a framework intermediary sitting between the model and the tool. For a self-hosted agent running entirely on one machine, all of that is overhead with no benefit. Named pipes skip the protocol layer entirely — the orchestrator opens a file path, writes a message, and reads the reply. The execution loop stays in the orchestrator's hands, with no framework in the middle and no network stack involved.
-
-## Example tools
-- LLM inference server
-- STT/TTS streaming server
-- in-memory key-value store
-- vector/graph database
-- browser automation server.
+For a deeper look at the design decisions and API reference, see [DOCS.md](DOCS.md).
 
 ## Installation
 
@@ -48,203 +44,80 @@ pip install -e ".[tts]"
 
 # With STT support (sounddevice; Voxtral weights vendored)
 pip install -e ".[stt]"
-
-# With Kokoro phonemiser (English misaki frontend)
-pip install -e ".[kokoro]"
-
-# With dev tools
-pip install -e ".[dev]"
 ```
 
-Requires Python 3.11+. LLM extras (macOS): `mlx-lm`, `transformers>=5.5.0`, `torch`. LLM extras (Linux): `vllm`, `transformers>=5.5.0`, `torch`. TTS extras (macOS): `mlx-audio`, `sounddevice`. STT extras: `sounddevice` (Voxtral inference code is vendored under `named_pipes/stt/voxtral/`).
+Requires **Python 3.11+**. See [DOCS.md](DOCS.md) for platform-specific dependency details.
 
-## Overview
+## Quick start
 
-The library builds a hierarchy of abstractions over named pipes, from low-level I/O up to application-level protocols:
-
-```
-TextNamedPipe (ABC)       DataNamedPipe (ABC)
-       ↓              ↘          ↓
-ToolNamedPipe          BasicPipeChannel (text + data)
-       ↓         ↘          ↘
-ChatNamedPipe   TTSNamedPipe  STTNamedPipe
-```
-
-### TextNamedPipe and DataNamedPipe
-
-These are the two abstract base classes. All higher-level protocols are built on top of one or both of them.
-
-**`TextNamedPipe`** manages a pair of named pipes for JSON message exchange:
-- Upstream pipe (`/tmp/<name>`) — shared; all clients write here
-- Downstream pipe (`/tmp/<name>-<pid>`) — one per subscribed client; the server writes here
-
-Each client subscribes with its PID, and the server creates a dedicated downstream pipe for it. This allows one server to handle multiple concurrent clients, routing responses back to the correct client. Subclasses implement `msg_handler_fn(msg: dict)` to define message handling logic.
-
-**`DataNamedPipe`** provides the same multiplexing model for binary data, using a 4-byte big-endian length prefix to frame each payload. Subclasses implement `data_handler_fn(data: bytes)`.
-
-All named pipes are opened `O_RDWR` on the server side so `open()` never blocks and the read end never sees EOF when the remote writer closes.
-
-### BasicPipeChannel
-
-`BasicPipeChannel` is a concrete implementation that combines both `TextNamedPipe` and `DataNamedPipe`, illustrating how the two base classes can be composed into a single channel. It exposes a simple decorator-based API for registering handlers:
-
-```python
-with BasicPipeChannel(role=Role.SERVER) as ch:
-    @ch.handler("PING")
-    def on_ping(data: str):
-        ch.send_message("PONG", "")
-
-    @ch.data_handler
-    def on_data(data: bytes):
-        ch.send_data(data)  # echo
-
-    ch.listen().wait()
-```
-
-See [`src/ex_basic_pipe/`](src/ex_basic_pipe/) for a working client/server example.
-
-### ToolNamedPipe
-
-`ToolNamedPipe` extends `TextNamedPipe` with a standardized protocol for building **agentic tools** — persistent server processes that expose capabilities to one or more clients (e.g. an agent). It defines a set of built-in commands (`subscribe`, `unsubscribe`, `description`, `help`, `exit`) and allows tools to register custom commands via a decorator.
-
-The full protocol specification is in [`named-pipe-tools.md`](named-pipe-tools.md).
-
-### ChatNamedPipe
-
-`ChatNamedPipe` inherits from `ToolNamedPipe` and implements an LLM inference tool. It registers two commands:
-
-- **`chat`** — streaming inference; sends token chunks as they are generated, followed by a `done: true` sentinel
-- **`chat_blocking`** — non-streaming inference; returns the full reply in one message
-
-Two backends are supported:
-
-- **`Backend.TRANSFORMERS`** — HuggingFace Transformers with `TextIteratorStreamer`; device is auto-detected (MPS / CUDA / CPU)
-- **`Backend.VLLM`** — vLLM for higher-throughput serving (Linux)
-
-```python
-from named_pipes.chat_named_pipe import Backend, ChatNamedPipe
-
-with ChatNamedPipe(
-    "chat",
-    "Qwen/Qwen3.5-0.8B",
-    backend=Backend.TRANSFORMERS,
-    description="Simple LLM chat server powered by Qwen3.5-0.8B.",
-    max_new_tokens=256,
-    do_sample=False,
-) as ch:
-    done = ch.listen()
-    print("LLM server listening on /tmp/tool-chat ...")
-    done.wait()
-```
-
-See [`src/ex_chat_pipe/`](src/ex_chat_pipe/) for a working client/server example.
-
-### TTSNamedPipe
-
-`TTSNamedPipe` inherits from `ToolNamedPipe` and implements a real-time text-to-speech tool. It accumulates incoming text tokens, splits on sentence boundaries (`. ! ?`), and synthesises each sentence as audio played through the system speakers. Synthesis and playback run on background threads so the pipe stays responsive during generation.
-
-Backend: [mlx-audio](https://github.com/Blaizzy/mlx-audio) with the Kokoro-82M model (macOS / Apple Silicon).
-
-Commands (in addition to `ToolNamedPipe` builtins):
-
-| Command | Data | Description |
-|---------|------|-------------|
-| `text` | token string | Append tokens to the text buffer; flush automatically at sentence boundaries |
-| `flush` | — | Force-synthesise whatever remains in the buffer (call at end of generation) |
-
-```python
-from named_pipes.tts_named_pipe import TTSNamedPipe
-
-with TTSNamedPipe("tts") as ch:
-    done = ch.listen()
-    print("TTS server listening on /tmp/tool-tts ...")
-    done.wait()
-```
-
-See [`src/ex_tts_pipe/`](src/ex_tts_pipe/) for a working server example and [`src/ex_tts_pipe/`](src/ex_tts_pipe/client.py) for the LLM→TTS pipeline client that streams LLM tokens directly into the TTS server in real time.
-
-### STTNamedPipe
-
-`STTNamedPipe` inherits from `ToolNamedPipe` and implements a real-time speech-to-text tool. On construction it starts a background thread that captures the default microphone and runs streaming decode via a vendored [Voxtral](https://mistral.ai/news/voxtral) implementation. Transcribed tokens and VAD lifecycle events are broadcast to all subscribers as JSON messages.
-
-Backend: vendored Voxtral (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`, macOS / Apple Silicon).
-
-Broadcast messages (no custom commands — this is a producer-only server):
-
-| Message | Description |
-|---------|-------------|
-| `{"result": "<token>"}` | Transcribed token chunk |
-| `{"event": "speech_start"}` | VAD detected speech onset |
-| `{"event": "speech_end"}` | VAD detected end of speech |
-
-```python
-from named_pipes.stt import STTNamedPipe
-
-with STTNamedPipe("stt") as ch:
-    done = ch.listen()
-    print("STT server listening on /tmp/tool-stt ...")
-    done.wait()
-```
-
-See [`src/ex_stt_pipe/`](src/ex_stt_pipe/) for a working server and a minimal subscriber client.
-
-## cpipe — CLI for named-pipe servers
-
-`cpipe` is installed as a console script and lets you send commands to any named-pipe tool server from the terminal, like `curl` for pipes.
+**1. Start a server** (Terminal 1):
 
 ```bash
-# Send a command (subscribe → send → wait for response → unsubscribe)
+conda activate named-pipes
+python src/ex_chat_pipe/server.py   # LLM server on /tmp/tool-chat
+```
+
+**2. Query it from the CLI** (Terminal 2):
+
+```bash
+cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello!"}]}'
+```
+
+**3. Or write a client in Python:**
+
+```python
+from named_pipes.tool_named_pipe import ToolNamedPipe, Role
+
+with ToolNamedPipe("tool-chat", role=Role.CLIENT) as ch:
+    ch.send_message("chat", '{"messages": [{"role":"user","content":"Hello!"}]}')
+    for msg in ch.receive_stream():
+        print(msg)
+```
+
+## Examples
+
+Start order matters — **server first**, then client (server creates the FIFOs).
+
+```bash
+# LLM chat
+python src/ex_chat_pipe/server.py   # Terminal 1
+python src/ex_chat_pipe/client.py   # Terminal 2
+
+# LLM → TTS pipeline (spoken output)
+python src/ex_chat_pipe/server.py   # Terminal 1: LLM  (/tmp/tool-chat)
+python src/ex_tts_pipe/server.py    # Terminal 2: TTS  (/tmp/tool-tts)
+python src/ex_tts_pipe/client.py    # Terminal 3: pipeline client
+
+# Speech-to-text
+python src/ex_stt_pipe/server.py    # Terminal 1: STT  (/tmp/tool-stt)
+python src/ex_stt_pipe/client.py    # Terminal 2: subscriber
+
+# Basic channel (no-frills text + binary)
+python src/ex_basic_pipe/server.py  # Terminal 1
+python src/ex_basic_pipe/client.py  # Terminal 2
+```
+
+## `cpipe` — CLI tool
+
+```bash
 cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
 
-# Discover running pipe servers
-cpipe --list            # connected / orphaned pipes under /tmp
-cpipe --pid             # same, plus the PIDs that have each pipe open
-cpipe --clear           # delete orphaned (no process has open) pipes
-
-# Options
-cpipe --timeout 30      # seconds to wait for response (default: 10)
-cpipe --no-subscribe    # skip subscribe/unsubscribe handshake
-cpipe --no-wait         # fire and forget
-cpipe -v                # verbose: print sent/received messages to stderr
+cpipe --list    # discover running pipe servers
+cpipe --pid     # same, plus PIDs that have each pipe open
+cpipe --clear   # delete orphaned pipes
 ```
 
-See [`.claude/skills/named-pipe-tools/SKILL.md`](.claude/skills/named-pipe-tools/SKILL.md) for the skill that teaches Claude Code how to use `cpipe` to interact with live servers.
+See [DOCS.md](DOCS.md) for all options and the full protocol reference.
 
-## Running the examples
+## Claude Code skill
 
-**Start order matters:** the server creates the named pipes; the client opens them.
+An included skill at [`.claude/skills/named-pipe-tools/SKILL.md`](.claude/skills/named-pipe-tools/SKILL.md) teaches Claude Code how to use `cpipe` to discover, inspect, and interact with live servers — so the LLM can query a local inference server or trigger TTS playback without leaving the coding session.
 
-```bash
-# LLM server (Terminal 1)
-conda activate named-pipes
-python src/ex_chat_pipe/server.py
+## Resources
 
-# LLM client — streaming + blocking demo (Terminal 2)
-conda activate named-pipes
-python src/ex_chat_pipe/client.py
-```
-
-```bash
-# LLM→TTS pipeline (three terminals)
-conda activate named-pipes
-python src/ex_chat_pipe/server.py   # Terminal 1: LLM server  (/tmp/tool-chat)
-python src/ex_tts_pipe/server.py    # Terminal 2: TTS server  (/tmp/tool-tts)
-python src/ex_tts_pipe/client.py    # Terminal 3: pipeline client (streams LLM tokens → TTS)
-```
-
-```bash
-# BasicPipeChannel (Terminal 1)
-conda activate named-pipes
-python src/ex_basic_pipe/server.py
-
-# BasicPipeChannel client (Terminal 2)
-conda activate named-pipes
-python src/ex_basic_pipe/client.py
-```
-
-```bash
-# STT server + subscriber (two terminals)
-conda activate named-pipes
-python src/ex_stt_pipe/server.py   # Terminal 1: STT server (/tmp/tool-stt)
-python src/ex_stt_pipe/client.py   # Terminal 2: subscriber — prints tokens and VAD events
-```
+- [DOCS.md](DOCS.md) — architecture, API reference, protocol spec, and design rationale
+- [`named-pipe-tools.md`](named-pipe-tools.md) — `ToolNamedPipe` protocol specification
+- [`src/ex_chat_pipe/`](src/ex_chat_pipe/) — LLM chat example
+- [`src/ex_tts_pipe/`](src/ex_tts_pipe/) — TTS example
+- [`src/ex_stt_pipe/`](src/ex_stt_pipe/) — STT example
+- [`src/ex_basic_pipe/`](src/ex_basic_pipe/) — basic channel example
