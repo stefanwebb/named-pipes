@@ -68,6 +68,7 @@ def stream_transcribe(
     on_speaking_started=lambda: print("\non_speaking_started", flush=True),
     on_speaking_finished=lambda: print("on_speaking_finished", flush=True),
     on_token: Optional[Callable[[str], None]] = None,
+    stop_event: Optional[threading.Event] = None,
 ):
     model, sp, config = load_model(model_path)
 
@@ -240,6 +241,9 @@ def stream_transcribe(
         start_time = time.monotonic()
         warned_no_audio = False
         while True:
+            if stop_event is not None and stop_event.is_set():
+                break
+
             # --- Drain mic ---
             with lock:
                 new_audio = audio_buf
