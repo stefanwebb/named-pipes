@@ -3,6 +3,7 @@ import collections
 import enum
 import threading
 import time
+from typing import Callable, Optional
 
 import mlx.core as mx
 import numpy as np
@@ -16,9 +17,11 @@ from .cache import RotatingKVCache
 
 N_LEFT_PAD_TOKENS = 32
 N_RIGHT_PAD_TOKENS = 17
-VAD_CHUNK_SIZE = 512      # samples per Silero VAD inference call (32 ms at 16 kHz)
-VAD_THRESHOLD = 0.5       # speech probability cutoff
-PRE_ROLL_BLOCKS = 4       # sounddevice blocks to prepend on speech onset (4 × 80 ms = ~320 ms)
+VAD_CHUNK_SIZE = 512  # samples per Silero VAD inference call (32 ms at 16 kHz)
+VAD_THRESHOLD = 0.5  # speech probability cutoff
+PRE_ROLL_BLOCKS = (
+    4  # sounddevice blocks to prepend on speech onset (4 × 80 ms = ~320 ms)
+)
 
 
 class VADState(enum.Enum):
@@ -64,6 +67,7 @@ def stream_transcribe(
     notify_on_eos: bool = False,
     on_speaking_started=lambda: print("\non_speaking_started", flush=True),
     on_speaking_finished=lambda: print("on_speaking_finished", flush=True),
+    on_token: Optional[Callable[[str], None]] = None,
 ):
     model, sp, config = load_model(model_path)
 
@@ -105,15 +109,17 @@ def stream_transcribe(
 
             token_id = y.item()
             if token_id == eos_token_id:
-                print(flush=True)
+                if on_token is None:
+                    print(flush=True)
                 cache = None
                 y = None
                 return i, True
 
-            text = sp.decode(
-                [token_id], special_token_policy=SpecialTokenPolicy.IGNORE
-            )
-            print(text, end="", flush=True)
+            text = sp.decode([token_id], special_token_policy=SpecialTokenPolicy.IGNORE)
+            if on_token is not None:
+                on_token(text)
+            else:
+                print(text, end="", flush=True)
 
             if i > 0 and i % 256 == 0:
                 mx.clear_cache()
@@ -136,11 +142,11 @@ def stream_transcribe(
     y = None
 
     # Incremental encoder state
-    audio_tail = None       # mel STFT overlap (240 samples)
-    conv1_tail = None       # conv1 kernel overlap (2 frames)
-    conv2_tail = None       # conv2 kernel overlap (1 frame)
-    encoder_cache = None    # KV cache for encoder transformer layers
-    ds_buf = None           # partial downsample group
+    audio_tail = None  # mel STFT overlap (240 samples)
+    conv1_tail = None  # conv1 kernel overlap (2 frames)
+    conv2_tail = None  # conv2 kernel overlap (1 frame)
+    encoder_cache = None  # KV cache for encoder transformer layers
+    ds_buf = None  # partial downsample group
 
     # Bounded buffers and counters
     pending_audio = np.zeros(0, dtype=np.float32)
@@ -202,8 +208,12 @@ def stream_transcribe(
                     text = sp.decode(
                         [token_id], special_token_policy=SpecialTokenPolicy.IGNORE
                     )
-                    print(text, end="", flush=True)
-            print(flush=True)
+                    if on_token is not None:
+                        on_token(text)
+                    else:
+                        print(text, end="", flush=True)
+            if on_token is None:
+                print(flush=True)
             cache = None
             y = None
 
@@ -303,7 +313,9 @@ def stream_transcribe(
 
                 mel, audio_tail = log_mel_spectrogram_step(chunk, audio_tail)
                 new_embeds, conv1_tail, conv2_tail, encoder_cache, ds_buf = (
-                    model.encode_step(mel, conv1_tail, conv2_tail, encoder_cache, ds_buf)
+                    model.encode_step(
+                        mel, conv1_tail, conv2_tail, encoder_cache, ds_buf
+                    )
                 )
                 if new_embeds is not None:
                     mx.eval(new_embeds)
@@ -318,7 +330,9 @@ def stream_transcribe(
 
                 mel, audio_tail = log_mel_spectrogram_step(chunk, audio_tail)
                 new_embeds, conv1_tail, conv2_tail, encoder_cache, ds_buf = (
-                    model.encode_step(mel, conv1_tail, conv2_tail, encoder_cache, ds_buf)
+                    model.encode_step(
+                        mel, conv1_tail, conv2_tail, encoder_cache, ds_buf
+                    )
                 )
                 if new_embeds is not None:
                     mx.eval(new_embeds)
@@ -358,9 +372,7 @@ def stream_transcribe(
                 n_total_decoded = prefix_len
                 prefilled = True
 
-                n_decodable = min(
-                    audio_embeds.shape[0], safe_total - n_total_decoded
-                )
+                n_decodable = min(audio_embeds.shape[0], safe_total - n_total_decoded)
 
             if n_decodable <= 0:
                 time.sleep(0.02)
