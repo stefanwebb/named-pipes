@@ -18,7 +18,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install package with all optional dependencies
-        run: uv venv && uv pip install -e ".[llm,dev]"
+        run: uv pip install -e ".[llm,dev]"
 
       - name: Run tests
         run: uv run pytest tests/ -v
