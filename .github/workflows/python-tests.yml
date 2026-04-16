@@ -17,8 +17,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install package with all optional dependencies
-        run: uv pip install -e ".[dev]"
+      - name: Install package and test dependencies
+        run: uv pip install -e . --no-deps && uv pip install psutil pytest
 
       - name: Run tests
         run: uv run pytest tests/ -v
