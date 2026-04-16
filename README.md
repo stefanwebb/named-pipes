@@ -46,6 +46,9 @@ pip install -e ".[llm]"
 # With TTS support (macOS: mlx-audio + sounddevice)
 pip install -e ".[tts]"
 
+# With STT support (sounddevice; Voxtral weights vendored)
+pip install -e ".[stt]"
+
 # With Kokoro phonemiser (English misaki frontend)
 pip install -e ".[kokoro]"
 
@@ -53,7 +56,7 @@ pip install -e ".[kokoro]"
 pip install -e ".[dev]"
 ```
 
-Requires Python 3.11+. LLM extras (macOS): `mlx-lm`, `transformers>=5.5.0`, `torch`. LLM extras (Linux): `vllm`, `transformers>=5.5.0`, `torch`. TTS extras (macOS): `mlx-audio`, `sounddevice`.
+Requires Python 3.11+. LLM extras (macOS): `mlx-lm`, `transformers>=5.5.0`, `torch`. LLM extras (Linux): `vllm`, `transformers>=5.5.0`, `torch`. TTS extras (macOS): `mlx-audio`, `sounddevice`. STT extras: `sounddevice` (Voxtral inference code is vendored under `named_pipes/stt/voxtral/`).
 
 ## Overview
 
@@ -63,8 +66,8 @@ The library builds a hierarchy of abstractions over named pipes, from low-level 
 TextNamedPipe (ABC)       DataNamedPipe (ABC)
        ↓              ↘          ↓
 ToolNamedPipe          BasicPipeChannel (text + data)
-       ↓         ↘
-ChatNamedPipe   TTSNamedPipe
+       ↓         ↘          ↘
+ChatNamedPipe   TTSNamedPipe  STTNamedPipe
 ```
 
 ### TextNamedPipe and DataNamedPipe
@@ -160,6 +163,31 @@ with TTSNamedPipe("tts") as ch:
 
 See [`src/ex_tts_pipe/`](src/ex_tts_pipe/) for a working server example and [`src/ex_tts_pipe/`](src/ex_tts_pipe/client.py) for the LLM→TTS pipeline client that streams LLM tokens directly into the TTS server in real time.
 
+### STTNamedPipe
+
+`STTNamedPipe` inherits from `ToolNamedPipe` and implements a real-time speech-to-text tool. On construction it starts a background thread that captures the default microphone and runs streaming decode via a vendored [Voxtral](https://mistral.ai/news/voxtral) implementation. Transcribed tokens and VAD lifecycle events are broadcast to all subscribers as JSON messages.
+
+Backend: vendored Voxtral (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`, macOS / Apple Silicon).
+
+Broadcast messages (no custom commands — this is a producer-only server):
+
+| Message | Description |
+|---------|-------------|
+| `{"result": "<token>"}` | Transcribed token chunk |
+| `{"event": "speech_start"}` | VAD detected speech onset |
+| `{"event": "speech_end"}` | VAD detected end of speech |
+
+```python
+from named_pipes.stt import STTNamedPipe
+
+with STTNamedPipe("stt") as ch:
+    done = ch.listen()
+    print("STT server listening on /tmp/tool-stt ...")
+    done.wait()
+```
+
+See [`src/ex_stt_pipe/`](src/ex_stt_pipe/) for a working server and a minimal subscriber client.
+
 ## cpipe — CLI for named-pipe servers
 
 `cpipe` is installed as a console script and lets you send commands to any named-pipe tool server from the terminal, like `curl` for pipes.
@@ -212,4 +240,11 @@ python src/ex_basic_pipe/server.py
 # BasicPipeChannel client (Terminal 2)
 conda activate named-pipes
 python src/ex_basic_pipe/client.py
+```
+
+```bash
+# STT server + subscriber (two terminals)
+conda activate named-pipes
+python src/ex_stt_pipe/server.py   # Terminal 1: STT server (/tmp/tool-stt)
+python src/ex_stt_pipe/client.py   # Terminal 2: subscriber — prints tokens and VAD events
 ```
