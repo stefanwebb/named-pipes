@@ -21,4 +21,4 @@ jobs:
         run: uv pip install -e . --no-deps && uv pip install psutil pytest
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        run: uv run --no-project pytest tests/ -v
