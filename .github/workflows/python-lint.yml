@@ -17,11 +17,8 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install ruff
-        run: uv pip install ruff
-
       - name: Check formatting (ruff format)
-        run: uv run ruff format --check .
+        run: uvx ruff format --check .
 
       - name: Check linting (ruff check)
-        run: uv run ruff check .
+        run: uvx ruff check .
