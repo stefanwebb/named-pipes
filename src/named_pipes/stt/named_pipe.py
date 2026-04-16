@@ -1,0 +1,83 @@
+"""
+© 2025–2026, Stefan Webb. Some Rights Reserved.
+
+Except where otherwise noted, this work is licensed under a
+Creative Commons Attribution-ShareAlike 4.0 International License
+https://creativecommons.org/licenses/by-sa/4.0/deed.en
+
+STTNamedPipe — a named-pipe tool that streams speech-to-text transcription
+from the default microphone to all subscribers.
+
+On construction the class starts a background thread running the vendored
+voxtral stream_transcribe loop. Per-token output is broadcast as
+{"result": "<token>"}; VAD speech-start / speech-end events are broadcast as
+{"event": "speech_start"} / {"event": "speech_end"}. The tool has no custom
+commands — it is producer-only.
+"""
+
+import json
+import threading
+
+from named_pipes.stt.voxtral.stream import stream_transcribe
+from named_pipes.text_named_pipe import Role
+from named_pipes.tool_named_pipe import ToolNamedPipe
+
+
+class STTNamedPipe(ToolNamedPipe):
+    """Named-pipe STT server.
+
+    Starts the microphone and the Voxtral streaming decode loop in a daemon
+    thread immediately on construction. Tokens and VAD lifecycle events are
+    broadcast to every subscriber as JSON messages.
+    """
+
+    def __init__(
+        self,
+        name: str = "stt",
+        *,
+        model_path: str = "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
+        temperature: float = 0.0,
+        vad_onset: int = 2,
+        vad_offset: int = 32,
+    ):
+        super().__init__(
+            name,
+            Role.SERVER,
+            description="Real-time speech-to-text server over a named pipe.",
+        )
+        self._stop_event = threading.Event()
+        self._broadcast_lock = threading.Lock()
+
+        self._worker = threading.Thread(
+            target=stream_transcribe,
+            kwargs={
+                "model_path": model_path,
+                "temperature": temperature,
+                "vad_onset": vad_onset,
+                "vad_offset": vad_offset,
+                "on_token": self._on_token,
+                "on_speaking_started": self._on_start,
+                "on_speaking_finished": self._on_end,
+                "stop_event": self._stop_event,
+            },
+            daemon=True,
+            name="stt-worker",
+        )
+        self._worker.start()
+
+    def _on_token(self, text: str) -> None:
+        with self._broadcast_lock:
+            self.broadcast_message(json.dumps({"result": text}))
+
+    def _on_start(self) -> None:
+        with self._broadcast_lock:
+            self.broadcast_message(json.dumps({"event": "speech_start"}))
+
+    def _on_end(self) -> None:
+        with self._broadcast_lock:
+            self.broadcast_message(json.dumps({"event": "speech_end"}))
+
+    def _close(self):
+        self._stop_event.set()
+        self._worker.join(timeout=5)
+        super()._close()
