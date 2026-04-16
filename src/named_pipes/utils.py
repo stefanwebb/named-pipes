@@ -37,12 +37,15 @@ def _is_fifo_connected(path: str) -> bool:
     """
     try:
         fd = os.open(path, os.O_WRONLY | os.O_NONBLOCK)
-        os.close(fd)
-        return True
     except OSError as exc:
         if exc.errno == errno.ENXIO:
             return False
         raise
+    try:
+        os.close(fd)
+    except OSError:
+        pass
+    return True
 
 
 def get_pids_for_pipe(pipe_path: str) -> list[int]:

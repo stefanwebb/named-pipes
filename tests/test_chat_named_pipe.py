@@ -40,6 +40,10 @@ def make_chat_pipe(backend=Backend.VLLM, reply="Hello!", **kwargs):
         patch.object(text_named_pipe.os, "pipe", return_value=(-1, -1)),
         patch.object(text_named_pipe.os, "open", return_value=3),
         patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
+        patch(
+            "named_pipes.tool_named_pipe.scan_pipes",
+            return_value={"connected": [], "orphaned": []},
+        ),
     ):
         pipe = ChatNamedPipe("test-chat", "mock-model", backend=backend, **defaults)
     return pipe
@@ -56,17 +60,16 @@ class TestChatNamedPipe:
         assert "chat" in pipe._handlers
 
     def test_chat_sends_response_to_sender(self):
+        import json
+
         pipe = make_chat_pipe(reply="Hi there!")
-        pipe.send_response = MagicMock()
+        pipe.send_message = MagicMock()
 
-        msg = {
-            "pid": 1,
-            "cmd": "chat",
-            "messages": [{"role": "user", "content": "Hey"}],
-        }
-        pipe._handlers["chat"](msg, 1)
+        pipe._infer_stream([{"role": "user", "content": "Hey"}], 1)
 
-        pipe.send_response.assert_called_once_with("Hi there!", 1)
+        pipe.send_message.assert_any_call(
+            json.dumps({"result": "Hi there!", "done": False}), 1
+        )
 
     def test_chat_passes_messages_to_llm(self):
         pipe = make_chat_pipe()

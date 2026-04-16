@@ -29,6 +29,10 @@ def make_tool(**kwargs):
         patch.object(text_named_pipe.os, "pipe", return_value=(-1, -1)),
         patch.object(text_named_pipe.os, "open", return_value=3),
         patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
+        patch(
+            "named_pipes.tool_named_pipe.scan_pipes",
+            return_value={"connected": [], "orphaned": []},
+        ),
     ):
         tool = ToolNamedPipe("test-tool", **defaults)
     return tool
