@@ -238,8 +238,6 @@ def stream_transcribe(
     stream.start()
 
     try:
-        start_time = time.monotonic()
-        warned_no_audio = False
         while True:
             if stop_event is not None and stop_event.is_set():
                 break

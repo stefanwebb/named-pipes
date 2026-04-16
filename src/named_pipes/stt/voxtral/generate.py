@@ -24,7 +24,9 @@ def generate(
     N_audio = audio_embeds.shape[0]
 
     # 3. Time conditioning (uses delay tokens only, not left pad)
-    t_cond = model.time_embedding(mx.array([n_delay_tokens], dtype=mx.float32))  # [1, dim]
+    t_cond = model.time_embedding(
+        mx.array([n_delay_tokens], dtype=mx.float32)
+    )  # [1, dim]
 
     # 4. Build prefix embeddings
     # prompt_tokens = [BOS] + [STREAMING_PAD] * (n_left_pad + n_delay)

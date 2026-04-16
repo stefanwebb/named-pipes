@@ -35,7 +35,9 @@ def pad_audio(
     n_right_pad_tokens: int = 17,
 ) -> np.ndarray:
     left_pad = n_left_pad_tokens * SAMPLES_PER_TOKEN
-    right_align = (SAMPLES_PER_TOKEN - (len(audio) % SAMPLES_PER_TOKEN)) % SAMPLES_PER_TOKEN
+    right_align = (
+        SAMPLES_PER_TOKEN - (len(audio) % SAMPLES_PER_TOKEN)
+    ) % SAMPLES_PER_TOKEN
     right_pad = right_align + n_right_pad_tokens * SAMPLES_PER_TOKEN
     return np.pad(audio, (left_pad, right_pad))
 
@@ -48,6 +50,7 @@ def mel_filter_bank(
     f_max: float = 8000.0,
 ) -> np.ndarray:
     """Slaney-style mel filter bank (matching mistral_common/audio.py)."""
+
     def hz_to_mel(f):
         # Slaney mel: linear below 1000 Hz, log above
         min_log_hz = 1000.0
@@ -56,7 +59,9 @@ def mel_filter_bank(
         mels = 3.0 * f / 200.0
         if isinstance(f, np.ndarray):
             log_region = f >= min_log_hz
-            mels[log_region] = min_log_mel + np.log(f[log_region] / min_log_hz) * logstep
+            mels[log_region] = (
+                min_log_mel + np.log(f[log_region] / min_log_hz) * logstep
+            )
         elif f >= min_log_hz:
             mels = min_log_mel + np.log(f / min_log_hz) * logstep
         return mels
@@ -84,7 +89,7 @@ def mel_filter_bank(
     fb = np.maximum(np.zeros(1), np.minimum(down_slopes, up_slopes))
 
     # Slaney normalization
-    enorm = 2.0 / (filter_freqs[2:n_mels + 2] - filter_freqs[:n_mels])
+    enorm = 2.0 / (filter_freqs[2 : n_mels + 2] - filter_freqs[:n_mels])
     fb *= np.expand_dims(enorm, 0)
 
     return fb.T.astype(np.float32)  # [n_mels, n_freqs]
@@ -130,7 +135,7 @@ def log_mel_spectrogram(audio: np.ndarray) -> mx.array:
     spec_imag = frames @ dft_imag.T  # [n_frames, n_freqs]
 
     # Power spectrum, drop last frame to match torch.stft(...)[..., :-1]
-    magnitudes = (spec_real[:-1] ** 2 + spec_imag[:-1] ** 2)  # [n_frames-1, n_freqs]
+    magnitudes = spec_real[:-1] ** 2 + spec_imag[:-1] ** 2  # [n_frames-1, n_freqs]
 
     # Mel filterbank
     mel_filters = _get_mel_filters()  # [n_mels, n_freqs]
@@ -200,7 +205,7 @@ def log_mel_spectrogram_step(
     spec_imag = frames @ dft_imag.T
 
     # Power spectrum (no [:-1] frame drop — incremental produces exact frames)
-    magnitudes = spec_real ** 2 + spec_imag ** 2
+    magnitudes = spec_real**2 + spec_imag**2
 
     # Mel filterbank
     mel_filters = _get_mel_filters()

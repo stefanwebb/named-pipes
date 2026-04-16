@@ -39,7 +39,9 @@ class VoxtralRealtime(nn.Module):
         super().__init__()
         enc = config["multimodal"]["whisper_model_args"]["encoder_args"]
         audio_enc = enc["audio_encoding_args"]
-        downsample = config["multimodal"]["whisper_model_args"]["downsample_args"]["downsample_factor"]
+        downsample = config["multimodal"]["whisper_model_args"]["downsample_args"][
+            "downsample_factor"
+        ]
 
         self.encoder = CausalWhisperEncoder(
             in_channels=audio_enc["num_mel_bins"],
@@ -119,8 +121,7 @@ class VoxtralRealtime(nn.Module):
         # Create encoder cache on first call
         if encoder_cache is None:
             encoder_cache = [
-                RotatingKVCache(100_000)
-                for _ in range(len(self.encoder.layers))
+                RotatingKVCache(100_000) for _ in range(len(self.encoder.layers))
             ]
 
         # Transformer with KV cache

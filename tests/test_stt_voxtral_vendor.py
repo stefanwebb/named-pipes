@@ -1,5 +1,9 @@
 """Verifies voxmlx source files are vendored into named_pipes.stt.voxtral and importable."""
 
+import pytest
+
+pytest.importorskip("mlx")
+
 
 def test_voxtral_subpackage_importable():
     from named_pipes.stt.voxtral.stream import stream_transcribe  # noqa: F401

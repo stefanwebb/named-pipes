@@ -60,9 +60,17 @@ def transcribe(
 
 def main():
     parser = argparse.ArgumentParser(description="Voxtral Mini Realtime speech-to-text")
-    parser.add_argument("--audio", default=None, help="Path to audio file (omit to stream from mic)")
-    parser.add_argument("--model", default="mlx-community/Voxtral-Mini-4B-Realtime-6bit", help="Model path or HF model ID")
-    parser.add_argument("--temp", type=float, default=0.0, help="Sampling temperature (0 = greedy)")
+    parser.add_argument(
+        "--audio", default=None, help="Path to audio file (omit to stream from mic)"
+    )
+    parser.add_argument(
+        "--model",
+        default="mlx-community/Voxtral-Mini-4B-Realtime-6bit",
+        help="Model path or HF model ID",
+    )
+    parser.add_argument(
+        "--temp", type=float, default=0.0, help="Sampling temperature (0 = greedy)"
+    )
     args = parser.parse_args()
 
     if args.audio is not None:

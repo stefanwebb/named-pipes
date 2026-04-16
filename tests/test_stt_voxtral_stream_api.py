@@ -2,6 +2,10 @@
 
 import inspect
 
+import pytest
+
+pytest.importorskip("mlx")
+
 from named_pipes.stt.voxtral.stream import stream_transcribe
 
 

@@ -17,7 +17,7 @@ class DecoderAttention(nn.Module):
         self.n_heads = n_heads
         self.n_kv_heads = n_kv_heads
         self.head_dim = head_dim
-        self.scale = head_dim ** -0.5
+        self.scale = head_dim**-0.5
         self.q_proj = nn.Linear(dim, n_heads * head_dim, bias=False)
         self.k_proj = nn.Linear(dim, n_kv_heads * head_dim, bias=False)
         self.v_proj = nn.Linear(dim, n_kv_heads * head_dim, bias=False)
@@ -32,13 +32,39 @@ class DecoderAttention(nn.Module):
         cache: RotatingKVCache | None = None,
     ) -> mx.array:
         B, L, _ = x.shape
-        q = self.q_proj(x).reshape(B, L, self.n_heads, self.head_dim).transpose(0, 2, 1, 3)
-        k = self.k_proj(x).reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
-        v = self.v_proj(x).reshape(B, L, self.n_kv_heads, self.head_dim).transpose(0, 2, 1, 3)
+        q = (
+            self.q_proj(x)
+            .reshape(B, L, self.n_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
+        k = (
+            self.k_proj(x)
+            .reshape(B, L, self.n_kv_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
+        v = (
+            self.v_proj(x)
+            .reshape(B, L, self.n_kv_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
 
         offset = cache.offset if cache is not None else 0
-        q = mx.fast.rope(q, self.head_dim, traditional=True, base=self.rope_theta, scale=1.0, offset=offset)
-        k = mx.fast.rope(k, self.head_dim, traditional=True, base=self.rope_theta, scale=1.0, offset=offset)
+        q = mx.fast.rope(
+            q,
+            self.head_dim,
+            traditional=True,
+            base=self.rope_theta,
+            scale=1.0,
+            offset=offset,
+        )
+        k = mx.fast.rope(
+            k,
+            self.head_dim,
+            traditional=True,
+            base=self.rope_theta,
+            scale=1.0,
+            offset=offset,
+        )
 
         if cache is not None:
             k, v = cache.update_and_fetch(k, v)
@@ -82,7 +108,9 @@ class DecoderLayer(nn.Module):
     ):
         super().__init__()
         self.attn_norm = nn.RMSNorm(dim, eps=1e-5)
-        self.attention = DecoderAttention(dim, n_heads, n_kv_heads, head_dim, rope_theta)
+        self.attention = DecoderAttention(
+            dim, n_heads, n_kv_heads, head_dim, rope_theta
+        )
         self.ada_norm = AdaptiveNorm(dim, cond_dim)
         self.ffn_norm = nn.RMSNorm(dim, eps=1e-5)
         self.mlp = DecoderSwiGLU(dim, hidden_dim)
@@ -117,7 +145,9 @@ class LanguageModel(nn.Module):
         super().__init__()
         self.embed_tokens = nn.Embedding(vocab_size, dim)
         self.layers = [
-            DecoderLayer(dim, n_heads, n_kv_heads, head_dim, hidden_dim, rope_theta, cond_dim)
+            DecoderLayer(
+                dim, n_heads, n_kv_heads, head_dim, hidden_dim, rope_theta, cond_dim
+            )
             for _ in range(n_layers)
         ]
         self.norm = nn.RMSNorm(dim, eps=1e-5)

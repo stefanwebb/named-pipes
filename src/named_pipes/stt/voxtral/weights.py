@@ -30,15 +30,42 @@ _REMAP_PATTERNS = [
     (r"whisper_encoder\.conv_layers\.0\.conv\.(.*)", r"encoder.conv1.\1"),
     (r"whisper_encoder\.conv_layers\.1\.conv\.(.*)", r"encoder.conv2.\1"),
     # Encoder transformer layers
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wq\.(.*)", r"encoder.layers.\1.attention.q_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wk\.(.*)", r"encoder.layers.\1.attention.k_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wv\.(.*)", r"encoder.layers.\1.attention.v_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wo\.(.*)", r"encoder.layers.\1.attention.o_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.attention_norm\.(.*)", r"encoder.layers.\1.attn_norm.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.feed_forward\.w1\.(.*)", r"encoder.layers.\1.mlp.gate_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.feed_forward\.w2\.(.*)", r"encoder.layers.\1.mlp.down_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.feed_forward\.w3\.(.*)", r"encoder.layers.\1.mlp.up_proj.\2"),
-    (r"whisper_encoder\.transformer\.layers\.(\d+)\.ffn_norm\.(.*)", r"encoder.layers.\1.ffn_norm.\2"),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wq\.(.*)",
+        r"encoder.layers.\1.attention.q_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wk\.(.*)",
+        r"encoder.layers.\1.attention.k_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wv\.(.*)",
+        r"encoder.layers.\1.attention.v_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.attention\.wo\.(.*)",
+        r"encoder.layers.\1.attention.o_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.attention_norm\.(.*)",
+        r"encoder.layers.\1.attn_norm.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.feed_forward\.w1\.(.*)",
+        r"encoder.layers.\1.mlp.gate_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.feed_forward\.w2\.(.*)",
+        r"encoder.layers.\1.mlp.down_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.feed_forward\.w3\.(.*)",
+        r"encoder.layers.\1.mlp.up_proj.\2",
+    ),
+    (
+        r"whisper_encoder\.transformer\.layers\.(\d+)\.ffn_norm\.(.*)",
+        r"encoder.layers.\1.ffn_norm.\2",
+    ),
     (r"whisper_encoder\.transformer\.norm\.(.*)", r"encoder.norm.\1"),
     # Adapter
     (r"audio_language_projection\.0\.weight", r"adapter.w_in.weight"),
@@ -46,17 +73,47 @@ _REMAP_PATTERNS = [
     # Language model embedding
     (r"tok_embeddings\.weight", r"language_model.embed_tokens.weight"),
     # Language model layers
-    (r"layers\.(\d+)\.attention\.wq\.weight", r"language_model.layers.\1.attention.q_proj.weight"),
-    (r"layers\.(\d+)\.attention\.wk\.weight", r"language_model.layers.\1.attention.k_proj.weight"),
-    (r"layers\.(\d+)\.attention\.wv\.weight", r"language_model.layers.\1.attention.v_proj.weight"),
-    (r"layers\.(\d+)\.attention\.wo\.weight", r"language_model.layers.\1.attention.o_proj.weight"),
-    (r"layers\.(\d+)\.attention_norm\.weight", r"language_model.layers.\1.attn_norm.weight"),
-    (r"layers\.(\d+)\.feed_forward\.w1\.weight", r"language_model.layers.\1.mlp.gate_proj.weight"),
-    (r"layers\.(\d+)\.feed_forward\.w2\.weight", r"language_model.layers.\1.mlp.down_proj.weight"),
-    (r"layers\.(\d+)\.feed_forward\.w3\.weight", r"language_model.layers.\1.mlp.up_proj.weight"),
+    (
+        r"layers\.(\d+)\.attention\.wq\.weight",
+        r"language_model.layers.\1.attention.q_proj.weight",
+    ),
+    (
+        r"layers\.(\d+)\.attention\.wk\.weight",
+        r"language_model.layers.\1.attention.k_proj.weight",
+    ),
+    (
+        r"layers\.(\d+)\.attention\.wv\.weight",
+        r"language_model.layers.\1.attention.v_proj.weight",
+    ),
+    (
+        r"layers\.(\d+)\.attention\.wo\.weight",
+        r"language_model.layers.\1.attention.o_proj.weight",
+    ),
+    (
+        r"layers\.(\d+)\.attention_norm\.weight",
+        r"language_model.layers.\1.attn_norm.weight",
+    ),
+    (
+        r"layers\.(\d+)\.feed_forward\.w1\.weight",
+        r"language_model.layers.\1.mlp.gate_proj.weight",
+    ),
+    (
+        r"layers\.(\d+)\.feed_forward\.w2\.weight",
+        r"language_model.layers.\1.mlp.down_proj.weight",
+    ),
+    (
+        r"layers\.(\d+)\.feed_forward\.w3\.weight",
+        r"language_model.layers.\1.mlp.up_proj.weight",
+    ),
     (r"layers\.(\d+)\.ffn_norm\.weight", r"language_model.layers.\1.ffn_norm.weight"),
-    (r"layers\.(\d+)\.ada_rms_norm_t_cond\.0\.weight", r"language_model.layers.\1.ada_norm.linear_in.weight"),
-    (r"layers\.(\d+)\.ada_rms_norm_t_cond\.2\.weight", r"language_model.layers.\1.ada_norm.linear_out.weight"),
+    (
+        r"layers\.(\d+)\.ada_rms_norm_t_cond\.0\.weight",
+        r"language_model.layers.\1.ada_norm.linear_in.weight",
+    ),
+    (
+        r"layers\.(\d+)\.ada_rms_norm_t_cond\.2\.weight",
+        r"language_model.layers.\1.ada_norm.linear_out.weight",
+    ),
     # Language model output norm
     (r"norm\.weight", r"language_model.norm.weight"),
 ]
@@ -64,7 +121,9 @@ _REMAP_PATTERNS = [
 
 def _remap_name(name: str) -> str | None:
     # Strip known prefixes before matching
-    name = re.sub(r"^(mm_streams_embeddings\.embedding_module|mm_whisper_embeddings)\.", "", name)
+    name = re.sub(
+        r"^(mm_streams_embeddings\.embedding_module|mm_whisper_embeddings)\.", "", name
+    )
     for pattern, replacement in _REMAP_PATTERNS:
         new_name, n = re.subn(f"^{pattern}$", replacement, name)
         if n > 0:
@@ -78,7 +137,9 @@ def _is_conv_weight(name: str) -> bool:
 
 def _is_converted_format(model_path: Path) -> bool:
     """Check if the model is in voxmlx converted format (has config.json + model.safetensors)."""
-    return (model_path / "config.json").exists() and not (model_path / "consolidated.safetensors").exists()
+    return (model_path / "config.json").exists() and not (
+        model_path / "consolidated.safetensors"
+    ).exists()
 
 
 def _load_converted(model_path: Path) -> tuple[VoxtralRealtime, dict]:

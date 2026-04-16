@@ -134,7 +134,6 @@ def scan_pipes(folder: str = "/tmp", *, with_pids: bool = False) -> dict:
     # Resolve symlinks: lsof reports real paths (e.g. /private/tmp on macOS).
     fifo_pairs: list[tuple[str, str]] = [(p, os.path.realpath(p)) for p in fifos]
     real_set = {real for _, real in fifo_pairs}
-    real_to_orig = {real: orig for orig, real in fifo_pairs}
     path_pids: dict[str, list[int]] = {}  # keyed by real path
 
     # Linux: read /proc/<pid>/fd symlinks directly.

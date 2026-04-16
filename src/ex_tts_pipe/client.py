@@ -21,7 +21,7 @@ from named_pipes.text_named_pipe import Role, TextNamedPipe
 QUERY = [
     {
         "role": "user",
-        #"content": "Tell me a short story about a robot learning to paint.",
+        # "content": "Tell me a short story about a robot learning to paint.",
         "content": "What is your name?",
     }
 ]

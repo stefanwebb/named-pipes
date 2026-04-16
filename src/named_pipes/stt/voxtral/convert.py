@@ -9,8 +9,7 @@ import mlx.core as mx
 import mlx.nn as nn
 from mlx.utils import tree_flatten, tree_reduce
 
-from .model import VoxtralRealtime
-from .weights import download_model, load_model, _remap_name, _is_conv_weight
+from .weights import download_model, load_model
 
 
 def _get_total_parameters(model):
@@ -184,7 +183,10 @@ def convert(
     if dtype is not None:
         dt = getattr(mx, dtype)
         weights = dict(tree_flatten(model.parameters()))
-        weights = {k: v.astype(dt) if v.dtype in (mx.float32, mx.float16, mx.bfloat16) else v for k, v in weights.items()}
+        weights = {
+            k: v.astype(dt) if v.dtype in (mx.float32, mx.float16, mx.bfloat16) else v
+            for k, v in weights.items()
+        }
         model.load_weights(list(weights.items()))
         mx.eval(model.parameters())
 
@@ -230,7 +232,8 @@ def main():
         help="Output directory (default: mlx_model)",
     )
     parser.add_argument(
-        "-q", "--quantize",
+        "-q",
+        "--quantize",
         action="store_true",
         help="Quantize the model",
     )

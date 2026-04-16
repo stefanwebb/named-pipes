@@ -30,7 +30,7 @@ class RotatingKVCache:
             return v
         elif self._idx < self._offset:
             return mx.concatenate(
-                [v[..., self._idx:, :], v[..., : self._idx, :]],
+                [v[..., self._idx :, :], v[..., : self._idx, :]],
                 axis=2,
             )
         else:
@@ -86,7 +86,9 @@ class RotatingKVCache:
         self._idx += S
 
         if self._offset < self.max_size:
-            return self.keys[..., : self._offset, :], self.values[..., : self._offset, :]
+            return self.keys[..., : self._offset, :], self.values[
+                ..., : self._offset, :
+            ]
         return self.keys, self.values
 
     def update_and_fetch(self, keys, values):

@@ -11,6 +11,8 @@ import time
 
 import pytest
 
+pytest.importorskip("mlx")
+
 import named_pipes.stt.named_pipe as stt_mod
 from named_pipes.stt import STTNamedPipe
 from named_pipes.text_named_pipe import Role, TextNamedPipe

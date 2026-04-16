@@ -3,7 +3,9 @@ import mlx.nn as nn
 
 
 class CausalConv1d(nn.Module):
-    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1):
+    def __init__(
+        self, in_channels: int, out_channels: int, kernel_size: int, stride: int = 1
+    ):
         super().__init__()
         self.stride = stride
         self.kernel_size = kernel_size
@@ -22,11 +24,17 @@ class CausalConv1d(nn.Module):
 
 
 class EncoderAttention(nn.Module):
-    def __init__(self, dim: int = 1280, n_heads: int = 32, head_dim: int = 64, rope_theta: float = 1e6):
+    def __init__(
+        self,
+        dim: int = 1280,
+        n_heads: int = 32,
+        head_dim: int = 64,
+        rope_theta: float = 1e6,
+    ):
         super().__init__()
         self.n_heads = n_heads
         self.head_dim = head_dim
-        self.scale = head_dim ** -0.5
+        self.scale = head_dim**-0.5
 
         self.q_proj = nn.Linear(dim, n_heads * head_dim, bias=True)
         self.k_proj = nn.Linear(dim, n_heads * head_dim, bias=False)
@@ -35,16 +43,44 @@ class EncoderAttention(nn.Module):
 
         self.rope_theta = rope_theta
 
-    def __call__(self, x: mx.array, offset: int, mask: mx.array, cache=None) -> mx.array:
+    def __call__(
+        self, x: mx.array, offset: int, mask: mx.array, cache=None
+    ) -> mx.array:
         B, L, _ = x.shape
-        q = self.q_proj(x).reshape(B, L, self.n_heads, self.head_dim).transpose(0, 2, 1, 3)
-        k = self.k_proj(x).reshape(B, L, self.n_heads, self.head_dim).transpose(0, 2, 1, 3)
-        v = self.v_proj(x).reshape(B, L, self.n_heads, self.head_dim).transpose(0, 2, 1, 3)
+        q = (
+            self.q_proj(x)
+            .reshape(B, L, self.n_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
+        k = (
+            self.k_proj(x)
+            .reshape(B, L, self.n_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
+        v = (
+            self.v_proj(x)
+            .reshape(B, L, self.n_heads, self.head_dim)
+            .transpose(0, 2, 1, 3)
+        )
 
         if cache is not None:
             offset = cache.offset
-        q = mx.fast.rope(q, self.head_dim, traditional=True, base=self.rope_theta, scale=1.0, offset=offset)
-        k = mx.fast.rope(k, self.head_dim, traditional=True, base=self.rope_theta, scale=1.0, offset=offset)
+        q = mx.fast.rope(
+            q,
+            self.head_dim,
+            traditional=True,
+            base=self.rope_theta,
+            scale=1.0,
+            offset=offset,
+        )
+        k = mx.fast.rope(
+            k,
+            self.head_dim,
+            traditional=True,
+            base=self.rope_theta,
+            scale=1.0,
+            offset=offset,
+        )
 
         if cache is not None:
             k, v = cache.update_and_fetch(k, v)
@@ -66,18 +102,26 @@ class EncoderSwiGLU(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    def __init__(self, dim: int = 1280, n_heads: int = 32, head_dim: int = 64, hidden_dim: int = 5120, rope_theta: float = 1e6):
+    def __init__(
+        self,
+        dim: int = 1280,
+        n_heads: int = 32,
+        head_dim: int = 64,
+        hidden_dim: int = 5120,
+        rope_theta: float = 1e6,
+    ):
         super().__init__()
         self.attn_norm = nn.RMSNorm(dim, eps=1e-5)
         self.attention = EncoderAttention(dim, n_heads, head_dim, rope_theta)
         self.ffn_norm = nn.RMSNorm(dim, eps=1e-5)
         self.mlp = EncoderSwiGLU(dim, hidden_dim)
 
-    def __call__(self, x: mx.array, offset: int, mask: mx.array, cache=None) -> mx.array:
+    def __call__(
+        self, x: mx.array, offset: int, mask: mx.array, cache=None
+    ) -> mx.array:
         x = x + self.attention(self.attn_norm(x), offset, mask, cache=cache)
         x = x + self.mlp(self.ffn_norm(x))
         return x
-
 
 
 class CausalWhisperEncoder(nn.Module):
@@ -96,7 +140,8 @@ class CausalWhisperEncoder(nn.Module):
         self.conv1 = CausalConv1d(in_channels, dim, kernel_size=3, stride=1)
         self.conv2 = CausalConv1d(dim, dim, kernel_size=3, stride=2)
         self.layers = [
-            EncoderLayer(dim, n_heads, head_dim, hidden_dim, rope_theta) for _ in range(n_layers)
+            EncoderLayer(dim, n_heads, head_dim, hidden_dim, rope_theta)
+            for _ in range(n_layers)
         ]
         self.norm = nn.RMSNorm(dim, eps=1e-5)
         self.sliding_window = sliding_window
@@ -122,10 +167,9 @@ class CausalWhisperEncoder(nn.Module):
             x = mx.concatenate([conv1_tail, new_mel], axis=1)
         else:
             x = mx.pad(new_mel, [(0, 0), (self.conv1.padding_total, 0), (0, 0)])
-        new_conv1_tail = new_mel[:, -self.conv1.padding_total:, :]
+        new_conv1_tail = new_mel[:, -self.conv1.padding_total :, :]
         x = nn.gelu(
-            mx.conv1d(x, self.conv1.weight, stride=self.conv1.stride)
-            + self.conv1.bias
+            mx.conv1d(x, self.conv1.weight, stride=self.conv1.stride) + self.conv1.bias
         )
 
         # Conv2 (k=3, s=2, causal pad=1)
@@ -133,7 +177,7 @@ class CausalWhisperEncoder(nn.Module):
             x_in = mx.concatenate([conv2_tail, x], axis=1)
         else:
             x_in = mx.pad(x, [(0, 0), (self.conv2.padding_total, 0), (0, 0)])
-        new_conv2_tail = x[:, -self.conv2.padding_total:, :]
+        new_conv2_tail = x[:, -self.conv2.padding_total :, :]
         x = nn.gelu(
             mx.conv1d(x_in, self.conv2.weight, stride=self.conv2.stride)
             + self.conv2.bias
