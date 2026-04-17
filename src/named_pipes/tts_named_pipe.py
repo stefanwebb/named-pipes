@@ -33,6 +33,7 @@ import threading
 
 import numpy as np
 import sounddevice as sd
+from pydantic import BaseModel
 
 from mlx_audio.tts.utils import load_model
 
@@ -47,6 +48,15 @@ VOICE = "af_heart"
 SAMPLE_RATE = 24_000
 BLOCKSIZE = 1024
 MODEL_ID = "mlx-community/Kokoro-82M-bf16"
+
+
+class TTSConfig(BaseModel):
+    name: str = "tts"
+    voice: str = VOICE
+    sample_rate: int = SAMPLE_RATE
+    blocksize: int = BLOCKSIZE
+    model_id: str = MODEL_ID
+
 
 # Sentence boundary: . ! ? followed by whitespace or end-of-string.
 _BOUNDARY = re.compile(r"(?<=[.!?])\s+")
@@ -65,23 +75,15 @@ class TTSNamedPipe(ToolNamedPipe):
     audio through sounddevice in real time.
     """
 
-    def __init__(
-        self,
-        name: str = "tts",
-        *,
-        voice: str = VOICE,
-        sample_rate: int = SAMPLE_RATE,
-        blocksize: int = BLOCKSIZE,
-        model_id: str = MODEL_ID,
-    ):
+    def __init__(self, config: TTSConfig = TTSConfig()):
         super().__init__(
-            name,
+            config.name,
             Role.SERVER,
             description="Real-time text-to-speech server over a named pipe.",
         )
-        self._voice = voice
-        self._sample_rate = sample_rate
-        self._blocksize = blocksize
+        self._voice = config.voice
+        self._sample_rate = config.sample_rate
+        self._blocksize = config.blocksize
 
         # Text accumulation buffer (accessed only from the listener thread).
         self._buf = ""
@@ -95,8 +97,8 @@ class TTSNamedPipe(ToolNamedPipe):
         self._audio_done = threading.Event()
 
         # Load model and start the TTS worker thread.
-        print(f"[TTS] Loading model {model_id!r}…")
-        self._model = load_model(model_id)
+        print(f"[TTS] Loading model {config.model_id!r}…")
+        self._model = load_model(config.model_id)
 
         self._tts_thread = threading.Thread(
             target=self._tts_worker, daemon=True, name="tts-worker"

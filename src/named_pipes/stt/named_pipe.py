@@ -18,9 +18,19 @@ commands — it is producer-only.
 import json
 import threading
 
+from pydantic import BaseModel
+
 from named_pipes.stt.voxtral.stream import stream_transcribe
 from named_pipes.text_named_pipe import Role
 from named_pipes.tool_named_pipe import ToolNamedPipe
+
+
+class STTConfig(BaseModel):
+    name: str = "stt"
+    model_path: str = "mlx-community/Voxtral-Mini-4B-Realtime-6bit"
+    temperature: float = 0.0
+    vad_onset: int = 2
+    vad_offset: int = 32
 
 
 class STTNamedPipe(ToolNamedPipe):
@@ -31,17 +41,9 @@ class STTNamedPipe(ToolNamedPipe):
     broadcast to every subscriber as JSON messages.
     """
 
-    def __init__(
-        self,
-        name: str = "stt",
-        *,
-        model_path: str = "mlx-community/Voxtral-Mini-4B-Realtime-6bit",
-        temperature: float = 0.0,
-        vad_onset: int = 2,
-        vad_offset: int = 32,
-    ):
+    def __init__(self, config: STTConfig = STTConfig()):
         super().__init__(
-            name,
+            config.name,
             Role.SERVER,
             description="Real-time speech-to-text server over a named pipe.",
         )
@@ -51,10 +53,10 @@ class STTNamedPipe(ToolNamedPipe):
         self._worker = threading.Thread(
             target=stream_transcribe,
             kwargs={
-                "model_path": model_path,
-                "temperature": temperature,
-                "vad_onset": vad_onset,
-                "vad_offset": vad_offset,
+                "model_path": config.model_path,
+                "temperature": config.temperature,
+                "vad_onset": config.vad_onset,
+                "vad_offset": config.vad_offset,
                 "on_token": self._on_token,
                 "on_speaking_started": self._on_start,
                 "on_speaking_finished": self._on_end,

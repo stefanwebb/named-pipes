@@ -14,7 +14,7 @@ from named_pipes.stt import STTNamedPipe
 
 
 def main():
-    with STTNamedPipe("stt") as ch:
+    with STTNamedPipe() as ch:
         done = ch.listen()
         print("STT server listening on /tmp/tool-stt ...")
         done.wait()

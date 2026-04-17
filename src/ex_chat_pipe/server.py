@@ -9,18 +9,11 @@ LLM server: loads Qwen3.5-0.8B via Transformers and serves chat requests
 over a named pipe using the ChatNamedPipe / ToolNamedPipe protocol.
 """
 
-from named_pipes.chat_named_pipe import Backend, ChatNamedPipe
+from named_pipes.chat_named_pipe import ChatNamedPipe
 
 
 def main():
-    with ChatNamedPipe(
-        "chat",
-        "Qwen/Qwen3.5-0.8B",
-        backend=Backend.TRANSFORMERS,
-        description="Simple LLM chat server powered by Qwen3.5-0.8B.",
-        max_new_tokens=256,
-        do_sample=False,
-    ) as ch:
+    with ChatNamedPipe() as ch:
         done = ch.listen()
         print("LLM server listening on /tmp/tool-chat ...")
         done.wait()

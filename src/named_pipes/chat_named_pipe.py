@@ -25,12 +25,23 @@ import json
 import threading
 from enum import Enum
 
+from pydantic import BaseModel
+
 from named_pipes.tool_named_pipe import ToolNamedPipe, Role
 
 
 class Backend(Enum):
     VLLM = "vllm"
     TRANSFORMERS = "transformers"
+
+
+class ChatConfig(BaseModel):
+    name: str = "chat"
+    model: str = "Qwen/Qwen3.5-0.8B"
+    backend: Backend = Backend.TRANSFORMERS
+    description: str = "LLM chat server over a named pipe."
+    help_text: str | None = None
+    backend_kwargs: dict = {"max_new_tokens": 256, "do_sample": False}
 
 
 class ChatNamedPipe(ToolNamedPipe):
@@ -61,26 +72,21 @@ class ChatNamedPipe(ToolNamedPipe):
     Replies with a single ``{"result": "<full text>"}`` message.
     """
 
-    def __init__(
-        self,
-        name: str,
-        model: str,
-        role: Role = Role.SERVER,
-        *,
-        backend: Backend = Backend.VLLM,
-        description: str,
-        help_text: str | None = None,
-        **backend_kwargs,
-    ):
-        super().__init__(name, role, description=description, help_text=help_text)
+    def __init__(self, config: ChatConfig = ChatConfig()):
+        super().__init__(
+            config.name,
+            Role.SERVER,
+            description=config.description,
+            help_text=config.help_text,
+        )
 
-        match backend:
+        match config.backend:
             case Backend.VLLM:
-                self._init_vllm(model, **backend_kwargs)
+                self._init_vllm(config.model, **config.backend_kwargs)
             case Backend.TRANSFORMERS:
-                self._init_transformers(model, **backend_kwargs)
+                self._init_transformers(config.model, **config.backend_kwargs)
             case _:
-                raise ValueError(f"unknown backend: {backend!r}")
+                raise ValueError(f"unknown backend: {config.backend!r}")
 
         @self.handler("chat")
         def on_chat(msg: dict, pid: int | None):

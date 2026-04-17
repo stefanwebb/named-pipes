@@ -14,7 +14,7 @@ from named_pipes.tts_named_pipe import TTSNamedPipe
 
 
 def main():
-    with TTSNamedPipe("tts") as ch:
+    with TTSNamedPipe() as ch:
         done = ch.listen()
         print("TTS server listening on /tmp/tool-tts ...")
         done.wait()
