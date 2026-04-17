@@ -9,8 +9,8 @@ LLM→TTS client: streams a chat query to the LLM server and forwards each
 token chunk to the TTS server in real time for speech synthesis.
 
 Requires both servers to be running before starting this client:
-    python src/ex_chat_pipe/server.py   (listens on /tmp/tool-chat)
-    python src/ex_tts_pipe/server.py    (listens on /tmp/tool-tts)
+    cpipe --serve chat   (listens on /tmp/tool-chat)
+    cpipe --serve tts    (listens on /tmp/tool-tts)
 """
 
 import json

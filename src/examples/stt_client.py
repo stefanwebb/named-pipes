@@ -9,7 +9,7 @@ STT subscriber: connects to the STT server on /tmp/tool-stt, subscribes,
 and prints each broadcast message until Ctrl+C.
 
 Requires the STT server to be running first:
-    python src/ex_stt_pipe/server.py
+    cpipe --serve stt
 """
 
 import json

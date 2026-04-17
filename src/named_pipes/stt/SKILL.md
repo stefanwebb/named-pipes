@@ -28,7 +28,7 @@ Tokens are sub-word pieces as produced by the Voxtral tokenizer — subscribers 
 
 ## Typical usage pattern
 
-1. Start the server (`python src/ex_stt_pipe/server.py`) — model load takes several seconds.
+1. Start the server (`cpipe --serve stt`) — model load takes several seconds.
 2. Subscribe.
 3. Speak into the system default microphone.
 4. Receive a stream of `speech_start` / `result` / `speech_end` messages per utterance.

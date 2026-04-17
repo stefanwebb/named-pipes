@@ -54,7 +54,7 @@ Requires **Python 3.11+**. See [DOCS.md](DOCS.md) for platform-specific dependen
 
 ```bash
 conda activate named-pipes
-python src/ex_chat_pipe/server.py   # LLM server on /tmp/tool-chat
+cpipe --serve chat   # LLM server on /tmp/tool-chat
 ```
 
 **2. Query it from the CLI** (Terminal 2):
@@ -80,21 +80,18 @@ Start order matters — **server first**, then client (server creates the FIFOs)
 
 ```bash
 # LLM chat
-python src/ex_chat_pipe/server.py   # Terminal 1
+cpipe --serve chat                  # Terminal 1
 python src/ex_chat_pipe/client.py   # Terminal 2
 
 # LLM → TTS pipeline (spoken output)
-python src/ex_chat_pipe/server.py   # Terminal 1: LLM  (/tmp/tool-chat)
-python src/ex_tts_pipe/server.py    # Terminal 2: TTS  (/tmp/tool-tts)
+cpipe --serve chat                  # Terminal 1: LLM  (/tmp/tool-chat)
+cpipe --serve tts                   # Terminal 2: TTS  (/tmp/tool-tts)
 python src/ex_tts_pipe/client.py    # Terminal 3: pipeline client
 
 # Speech-to-text
-python src/ex_stt_pipe/server.py    # Terminal 1: STT  (/tmp/tool-stt)
+cpipe --serve stt                   # Terminal 1: STT  (/tmp/tool-stt)
 python src/ex_stt_pipe/client.py    # Terminal 2: subscriber
 
-# Basic channel (no-frills text + binary)
-python src/ex_basic_pipe/server.py  # Terminal 1
-python src/ex_basic_pipe/client.py  # Terminal 2
 ```
 
 ## `cpipe` — CLI tool
@@ -120,4 +117,3 @@ An included skill at [`.claude/skills/named-pipe-tools/SKILL.md`](.claude/skills
 - [`src/ex_chat_pipe/`](src/ex_chat_pipe/) — LLM chat example
 - [`src/ex_tts_pipe/`](src/ex_tts_pipe/) — TTS example
 - [`src/ex_stt_pipe/`](src/ex_stt_pipe/) — STT example
-- [`src/ex_basic_pipe/`](src/ex_basic_pipe/) — basic channel example

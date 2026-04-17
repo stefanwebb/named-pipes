@@ -10,7 +10,6 @@ single question, and prints the reply.
 
 | File | Role |
 |---|---|
-| `server.py` | `ChatNamedPipe` server — loads the model and listens for requests |
 | `client.py` | `TextNamedPipe` client — subscribes, sends one query, prints the response |
 
 ## Running
@@ -19,7 +18,7 @@ Start the server first (it creates the FIFO and loads the model):
 
 ```bash
 conda activate named-pipes
-python src/ex_chat_pipe/server.py
+cpipe --serve chat
 ```
 
 Then, in a separate terminal, run the client:

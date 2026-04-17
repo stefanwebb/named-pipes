@@ -10,7 +10,6 @@ Full architecture, API reference, protocol details, and design rationale for the
 - [Architecture](#architecture)
 - [API reference](#api-reference)
   - [TextNamedPipe and DataNamedPipe](#textnamedpipe-and-datanamedpipe)
-  - [BasicPipeChannel](#basicpipechannel)
   - [ToolNamedPipe](#toolnamedpipe)
   - [ChatNamedPipe](#chatnamedpipe)
   - [TTSNamedPipe](#ttsnamedpipe)
@@ -40,11 +39,11 @@ A named pipe (FIFO) is a special file in the filesystem that acts as a one-way c
 The library builds a hierarchy of abstractions over named pipes, from low-level I/O up to application-level protocols:
 
 ```
-TextNamedPipe (ABC)       DataNamedPipe (ABC)
-       ↓              ↘          ↓
-ToolNamedPipe          BasicPipeChannel (text + data)
-       ↓         ↘          ↘
-ChatNamedPipe   TTSNamedPipe  STTNamedPipe
+TextNamedPipe (ABC)   DataNamedPipe (ABC)
+       ↓
+ToolNamedPipe
+    ↓       ↓       ↓
+ChatNamedPipe  TTSNamedPipe  STTNamedPipe
 ```
 
 ### Pipe layout
@@ -75,25 +74,6 @@ These are the two abstract base classes. All higher-level protocols are built on
 Each client subscribes with its PID, and the server creates a dedicated downstream pipe for it. This allows one server to handle multiple concurrent clients, routing responses back to the correct client. Subclasses implement `msg_handler_fn(msg: dict)` to define message handling logic.
 
 **`DataNamedPipe`** provides the same multiplexing model for binary data, using a 4-byte big-endian length prefix to frame each payload. Subclasses implement `data_handler_fn(data: bytes)`.
-
-### BasicPipeChannel
-
-`BasicPipeChannel` is a concrete implementation that combines both `TextNamedPipe` and `DataNamedPipe`, illustrating how the two base classes can be composed into a single channel. It exposes a simple decorator-based API for registering handlers:
-
-```python
-with BasicPipeChannel(role=Role.SERVER) as ch:
-    @ch.handler("PING")
-    def on_ping(data: str):
-        ch.send_message("PONG", "")
-
-    @ch.data_handler
-    def on_data(data: bytes):
-        ch.send_data(data)  # echo
-
-    ch.listen().wait()
-```
-
-See [`src/ex_basic_pipe/`](src/ex_basic_pipe/) for a working client/server example.
 
 ### ToolNamedPipe
 
