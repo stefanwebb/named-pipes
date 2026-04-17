@@ -56,9 +56,19 @@ class TextNamedPipe(ABC):
         else:
             downstream = f"{pipe_name}-{self._pid}"
             ensure_pipe(downstream)
-            self._msg_recv = os.fdopen(os.open(downstream, os.O_RDWR), "r", buffering=1)
-            self._msg_send = os.fdopen(os.open(pipe_name, os.O_RDWR), "w", buffering=1)
             self._owned_pipes = [downstream]
+            self._msg_recv = os.fdopen(os.open(downstream, os.O_RDWR), "r", buffering=1)
+            try:
+                self._msg_send = os.fdopen(
+                    os.open(pipe_name, os.O_RDWR), "w", buffering=1
+                )
+            except FileNotFoundError:
+                self._msg_recv.close()
+                remove_pipe(downstream)
+                print(
+                    f"Error: server pipe '{pipe_name}' not found. Is the server running?"
+                )
+                raise SystemExit(1)
 
     # --- subscribe / unsubscribe (server only) ---
 
@@ -168,7 +178,7 @@ class TextNamedPipe(ABC):
         if self._role is Role.SERVER:
             for pid in list(self._subscribers):
                 self.unsubscribe(pid)
-        else:
+        elif hasattr(self, "_msg_send"):
             self._msg_send.close()
         for fd in (self._text_stop_r, self._text_stop_w):
             try:

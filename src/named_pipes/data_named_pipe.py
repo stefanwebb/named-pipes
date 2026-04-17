@@ -60,13 +60,21 @@ class DataNamedPipe(ABC):
         else:
             downstream = f"{pipe_name}-{self._pid}"
             ensure_pipe(downstream)
+            self._data_owned_pipes = [downstream]
             self._data_recv = os.fdopen(
                 os.open(downstream, os.O_RDWR), "rb", buffering=0
             )
-            self._data_send = os.fdopen(
-                os.open(pipe_name, os.O_RDWR), "wb", buffering=0
-            )
-            self._data_owned_pipes = [downstream]
+            try:
+                self._data_send = os.fdopen(
+                    os.open(pipe_name, os.O_RDWR), "wb", buffering=0
+                )
+            except FileNotFoundError:
+                self._data_recv.close()
+                remove_pipe(downstream)
+                print(
+                    f"Error: server pipe '{pipe_name}' not found. Is the server running?"
+                )
+                raise SystemExit(1)
 
     # --- subscribe / unsubscribe (server only) ---
 
@@ -146,6 +154,8 @@ class DataNamedPipe(ABC):
 
     def stop_data(self):
         """Unblock the listen_data() loop."""
+        if not hasattr(self, "_data_stop_w"):
+            return
         try:
             os.write(self._data_stop_w, b"\x00")
         except OSError:
@@ -176,7 +186,7 @@ class DataNamedPipe(ABC):
         return done
 
     def _close_data(self):
-        if self._data_closed:
+        if not hasattr(self, "_data_closed") or self._data_closed:
             return
         self._data_closed = True
         self.stop_data()
@@ -187,7 +197,7 @@ class DataNamedPipe(ABC):
         if self._data_role is Role.SERVER:
             for pid in list(self._data_subscribers):
                 self.unsubscribe(pid)
-        else:
+        elif hasattr(self, "_data_send"):
             self._data_send.close()
         for fd in (self._data_stop_r, self._data_stop_w):
             try:
