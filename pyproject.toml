@@ -5,8 +5,34 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "named-pipes"
 version = "0.1.2"
+description = "Low-latency interprocess communication via named pipes for Python agent/service workflows"
+readme = "README.md"
+license = {text = "CC-BY-SA-4.0"}
 requires-python = ">=3.11"
+authors = [{name = "Stefan Webb", email = "info@stefanwebb.me"}]
+keywords = ["ipc", "named-pipes", "fifo", "agents", "llm", "tts", "stt", "streaming"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Sound/Audio :: Speech",
+]
 dependencies = ["psutil"]
+
+[project.urls]
+Homepage = "https://github.com/stefanwebb/named-pipes"
+Repository = "https://github.com/stefanwebb/named-pipes"
+Changelog = "https://github.com/stefanwebb/named-pipes/blob/main/CHANGELOG.md"
+"Bug Tracker" = "https://github.com/stefanwebb/named-pipes/issues"
 
 [project.optional-dependencies]
 llm = [
