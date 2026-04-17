@@ -99,9 +99,9 @@ python src/ex_stt_pipe/client.py    # Terminal 2: subscriber
 ```bash
 cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
 
-cpipe --list    # discover running pipe servers
+cpipe --list    # discover running ToolNamedPipe servers (tool-* pipes)
 cpipe --pid     # same, plus PIDs that have each pipe open
-cpipe --clear   # delete orphaned pipes
+cpipe --clear   # delete orphaned tool pipes
 ```
 
 See [DOCS.md](DOCS.md) for all options and the full protocol reference.

@@ -4,7 +4,7 @@ description: Use cpipe to discover, inspect, and send commands to named-pipe too
 allowed-tools: [Bash]
 ---
 
-Use `cpipe` to interact with named-pipe tool servers. Always activate the `named-pipes` conda environment first.
+Use `cpipe` to interact with `ToolNamedPipe` servers (servers following the `tool-*` pipe naming convention). Always activate the `named-pipes` conda environment first.
 
 ```bash
 conda activate named-pipes
@@ -13,9 +13,9 @@ conda activate named-pipes
 ## Discover running servers
 
 ```bash
-cpipe --list          # list all named pipes under /tmp (fast, no process scan)
+cpipe --list          # list tool pipes (tool-* convention) under /tmp (fast, no process scan)
 cpipe --pid           # same, but also show which PIDs have each pipe open
-cpipe --clear         # delete orphaned pipes (no live process) under /tmp
+cpipe --clear         # delete orphaned tool pipes (no live process) under /tmp
 ```
 
 Pass an optional directory to search a different root (e.g. `cpipe --list /var/tmp`).
@@ -56,21 +56,10 @@ cpipe chat chat -j '{"messages":[{"role":"user","content":"Tell me a joke"}]}'
 
 | Flag | Effect |
 |---|---|
-| `--tool` | Force tool protocol (`subscribe`/`unsubscribe` handshake) |
-| `--basic` | Force basic pipe protocol (`SUBSCRIBE`/`SUBSCRIBED` handshake) |
 | `--no-subscribe` | Skip the subscribe/unsubscribe handshake entirely |
 | `-n` / `--no-wait` | Fire-and-forget; do not wait for a response |
 | `-t SECS` / `--timeout SECS` | Response timeout in seconds (default: 5.0) |
 | `-v` / `--verbose` | Print sent messages and status to stderr |
-
-Bare tool names and `/tmp/tool-*` paths default to tool protocol. Any other absolute path defaults to basic protocol.
-
-## Basic-protocol servers
-
-```bash
-cpipe /tmp/basic_pipe PING --basic
-cpipe /tmp/basic_pipe GREET -d Bob --basic
-```
 
 ## Examples
 

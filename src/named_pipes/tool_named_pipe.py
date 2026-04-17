@@ -46,21 +46,9 @@ class ToolNamedPipe(TextNamedPipe):
         self._tool_name = name
         self._description = description
         if help_text is None:
-            # Find the first frame outside this package to locate the caller's __file__.
-            caller_file = None
-            for frame_info in inspect.stack():
-                frame_path = frame_info.filename
-                if (
-                    not frame_path.startswith("<")
-                    and "named_pipes" not in Path(frame_path).parts
-                ):
-                    caller_file = Path(frame_path)
-                    break
-            skill_md = (
-                (caller_file.parent / "SKILL.md")
-                if caller_file
-                else (Path.cwd() / "SKILL.md")
-            )
+            # Look for SKILL.md next to the concrete subclass's module file.
+            subclass_file = inspect.getfile(type(self))
+            skill_md = Path(subclass_file).parent / "SKILL.md"
             help_text = skill_md.read_text() if skill_md.exists() else description
         self._help_text = help_text
         self._handlers: dict[str, callable] = {}

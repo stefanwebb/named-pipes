@@ -164,16 +164,16 @@ See [`src/ex_stt_pipe/`](src/ex_stt_pipe/) for a working server and a minimal su
 
 ## cpipe CLI reference
 
-`cpipe` is installed as a console script and lets you send commands to any named-pipe tool server from the terminal, like `curl` for pipes.
+`cpipe` is installed as a console script and lets you send commands to any `ToolNamedPipe` server from the terminal, like `curl` for pipes. Discovery commands (`--list`, `--pid`, `--clear`) only show pipes following the `tool-*` naming convention.
 
 ```bash
 # Send a command (subscribe → send → wait for response → unsubscribe)
 cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
 
-# Discover running pipe servers
-cpipe --list            # connected / orphaned pipes under /tmp
+# Discover running ToolNamedPipe servers
+cpipe --list            # tool pipes (tool-*) connected / orphaned under /tmp
 cpipe --pid             # same, plus the PIDs that have each pipe open
-cpipe --clear           # delete orphaned (no process has open) pipes
+cpipe --clear           # delete orphaned tool pipes (no process has open)
 
 # Options
 cpipe --timeout 30      # seconds to wait for response (default: 10)

@@ -1,5 +1,5 @@
 """
-cpipe — send a command to a named-pipe server, like curl for pipes.
+cpipe — send a command to a ToolNamedPipe server, like curl for pipes.
 
 © 2025–2026, Stefan Webb. Some Rights Reserved.
 
@@ -18,19 +18,30 @@ from named_pipes.text_named_pipe import Role, TextNamedPipe
 from named_pipes.utils import scan_pipes
 
 
+def _filter_tool_pipes(result: dict) -> dict:
+    """Keep only pipes whose basename starts with 'tool-' (tool-* convention)."""
+    return {
+        "connected": [
+            e
+            for e in result["connected"]
+            if os.path.basename(e["path"]).startswith("tool-")
+        ],
+        "orphaned": [
+            p for p in result["orphaned"] if os.path.basename(p).startswith("tool-")
+        ],
+    }
+
+
 def _print_scan_result(root: str, result: dict, show_pids: bool) -> None:
     connected = result["connected"]
     orphaned = result["orphaned"]
     total = len(connected) + len(orphaned)
 
     if total == 0:
-        print(f"No named pipes found under {root!r}.")
+        print(f"No tool pipes found under {root!r}.")
         return
 
-    print(
-        f"Scanning {root!r} — {total} pipe(s): "
-        f"{len(connected)} connected, {len(orphaned)} orphaned.\n"
-    )
+    print(f"{total} pipe(s): {len(connected)} connected, {len(orphaned)} orphaned.\n")
 
     if connected:
         print("Connected (open by a process):")
@@ -52,17 +63,20 @@ def _print_scan_result(root: str, result: dict, show_pids: bool) -> None:
 
 def _list_pipes(root: str = "/tmp") -> None:
     """Print connected/orphaned pipes (fast O_WRONLY probe, no process scan)."""
-    _print_scan_result(root, scan_pipes(root), show_pids=False)
+    _print_scan_result(root, _filter_tool_pipes(scan_pipes(root)), show_pids=False)
 
 
 def _pid_pipes(root: str = "/tmp") -> None:
     """Print connected pipes with PIDs and orphaned pipes (full process scan)."""
-    _print_scan_result(root, scan_pipes(root, with_pids=True), show_pids=True)
+    print(f"Scanning {root!r} for tool pipes (this may take a moment)...", flush=True)
+    _print_scan_result(
+        root, _filter_tool_pipes(scan_pipes(root, with_pids=True)), show_pids=True
+    )
 
 
 def _clear_pipes(root: str = "/tmp") -> None:
     """Delete orphaned named pipes under *root*."""
-    result = scan_pipes(root)
+    result = _filter_tool_pipes(scan_pipes(root))
     orphaned = result["orphaned"]
 
     if not orphaned:
@@ -186,27 +200,25 @@ def _serve(kind: str) -> None:
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="cpipe",
-        description="Send a command to a named-pipe server (like curl for pipes).",
+        description="Send a command to a ToolNamedPipe server (like curl for pipes).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
   cpipe --serve chat                           start the chat server with defaults
   cpipe --serve tts                            start the TTS server with defaults
   cpipe --serve stt                            start the STT server with defaults
-  cpipe --list                                 list all named pipes under /tmp
-  cpipe --list /var/tmp                        list named pipes under /var/tmp
-  cpipe --pid                                  list pipes with PIDs under /tmp
-  cpipe --pid /var/tmp                         list pipes with PIDs under /var/tmp
-  cpipe --clear                                delete orphaned pipes under /tmp
-  cpipe --clear /var/tmp                       delete orphaned pipes under /var/tmp
+  cpipe --list                                 list tool pipes (tool-*) under /tmp
+  cpipe --list /var/tmp                        list tool pipes under /var/tmp
+  cpipe --pid                                  list tool pipes with PIDs under /tmp
+  cpipe --pid /var/tmp                         list tool pipes with PIDs under /var/tmp
+  cpipe --clear                                delete orphaned tool pipes under /tmp
+  cpipe --clear /var/tmp                       delete orphaned tool pipes under /var/tmp
   cpipe chat description                       get tool description
   cpipe /tmp/tool-chat help                    get help text
   cpipe chat exit                              shut down the server
   cpipe chat ping                              send a custom command
   cpipe chat greet -d Alice                    send data with a command
   cpipe chat chat -j '{"messages":[...]}'      merge extra JSON fields
-  cpipe /tmp/basic_pipe PING --basic           basic-protocol PING
-  cpipe /tmp/basic_pipe GREET -d Bob --basic   basic-protocol GREET with data
 """,
     )
     parser.add_argument(
@@ -286,21 +298,21 @@ Examples:
         metavar="DIR",
         nargs="?",
         const="/tmp",
-        help="list all named pipes under DIR (default: /tmp); fast, no process scan",
+        help="list tool pipes (tool-* convention) under DIR (default: /tmp); fast, no process scan",
     )
     parser.add_argument(
         "--pid",
         metavar="DIR",
         nargs="?",
         const="/tmp",
-        help="list named pipes with PIDs under DIR (default: /tmp); slower, full scan",
+        help="list tool pipes with PIDs under DIR (default: /tmp); slower, full scan",
     )
     parser.add_argument(
         "--clear",
         metavar="DIR",
         nargs="?",
         const="/tmp",
-        help="delete orphaned named pipes under DIR (default: /tmp)",
+        help="delete orphaned tool pipes (tool-* convention) under DIR (default: /tmp)",
     )
     args = parser.parse_args(argv)
 
