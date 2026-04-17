@@ -69,6 +69,16 @@ Opens the client's downstream pipe.
 ```
 Closes the client's downstream pipe.
 
+#### `ping`
+```json
+// Request
+{ "pid": 1234, "cmd": "ping" }
+
+// Response (to sender only)
+{ "result": "pong" }
+```
+Health check. Confirms the tool is alive and processing messages.
+
 #### `description`
 ```json
 // Request

@@ -111,6 +111,9 @@ class ToolNamedPipe(TextNamedPipe):
             case "help":
                 self.send_response(self._help_text, pid)
 
+            case "ping":
+                self.send_response("pong", pid)
+
             case "exit":
                 self.broadcast_message(json.dumps({"result": "exiting"}))
                 self.stop()
