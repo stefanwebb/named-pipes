@@ -32,6 +32,7 @@ cpipe <tool> <cmd>
 
 ```bash
 cpipe chat ping                 # health check — responds with "pong"
+cpipe chat status               # current state of the server (e.g. "running")
 cpipe chat description          # one-line description of the tool
 cpipe chat help                 # full help text (SKILL.md content)
 cpipe chat exit                 # shut the server down gracefully

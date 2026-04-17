@@ -24,6 +24,7 @@ CHAT server listening on /tmp/tool-chat ...
 | Command | Description |
 |---|---|
 | `ping` | Health check — responds with `pong` |
+| `status` | Current server state (e.g. `running`) |
 | `description` | One-line description of the server |
 | `help` | Full help text (this file) |
 | `exit` | Shut the server down gracefully |

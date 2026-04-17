@@ -79,6 +79,16 @@ Closes the client's downstream pipe.
 ```
 Health check. Confirms the tool is alive and processing messages.
 
+#### `status`
+```json
+// Request
+{ "pid": 1234, "cmd": "status" }
+
+// Response (to sender only)
+{ "result": "<state>" }
+```
+Returns the tool's current state as a string (e.g. `"running"`). Subclasses may define additional states.
+
 #### `description`
 ```json
 // Request

@@ -25,6 +25,8 @@ TTS server listening on /tmp/tool-tts ...
 
 | Command | Description |
 |---|---|
+| `ping` | Health check — responds with `pong` |
+| `status` | Current server state (e.g. `running`) |
 | `description` | One-line description of the server |
 | `help` | Full help text |
 | `exit` | Shut the server down gracefully |

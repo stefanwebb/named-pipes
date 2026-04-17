@@ -11,6 +11,7 @@ Pipe: `/tmp/tool-chat`
 | `subscribe` | `{"pid": <int>, "cmd": "subscribe"}` | `{"result": "subscribed"}` |
 | `unsubscribe` | `{"pid": <int>, "cmd": "unsubscribe"}` | *(none)* |
 | `ping` | `{"pid": <int>, "cmd": "ping"}` | `{"result": "pong"}` |
+| `status` | `{"pid": <int>, "cmd": "status"}` | `{"result": "<state>"}` e.g. `"running"` |
 | `description` | `{"pid": <int>, "cmd": "description"}` | `{"result": "<one-line description>"}` |
 | `help` | `{"pid": <int>, "cmd": "help"}` | `{"result": "<this text>"}` |
 | `exit` | `{"pid": <int>, "cmd": "exit"}` | `{"result": "exiting"}` broadcast to all subscribers, then server exits |

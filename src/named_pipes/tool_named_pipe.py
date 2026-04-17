@@ -13,10 +13,15 @@ See named-pipe-tools.md for the full specification.
 import inspect
 import json
 import os
+from enum import Enum
 from pathlib import Path
 
 from named_pipes.text_named_pipe import TextNamedPipe, Role
 from named_pipes.utils import scan_pipes
+
+
+class ToolState(Enum):
+    RUNNING = "running"
 
 
 class ToolNamedPipe(TextNamedPipe):
@@ -51,6 +56,7 @@ class ToolNamedPipe(TextNamedPipe):
             skill_md = Path(subclass_file).parent / "SKILL.md"
             help_text = skill_md.read_text() if skill_md.exists() else description
         self._help_text = help_text
+        self._state = ToolState.RUNNING
         self._handlers: dict[str, callable] = {}
 
         # On startup, remove orphaned tool pipes left by crashed servers/clients.
@@ -113,6 +119,9 @@ class ToolNamedPipe(TextNamedPipe):
 
             case "ping":
                 self.send_response("pong", pid)
+
+            case "status":
+                self.send_response(self._state.value, pid)
 
             case "exit":
                 self.broadcast_message(json.dumps({"result": "exiting"}))
