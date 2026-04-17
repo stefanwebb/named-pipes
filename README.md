@@ -108,7 +108,7 @@ See [DOCS.md](DOCS.md) for all options and the full protocol reference.
 
 ## Claude Code skill
 
-An included skill at [`.claude/skills/named-pipe-tools/SKILL.md`](.claude/skills/named-pipe-tools/SKILL.md) teaches Claude Code how to use `cpipe` to discover, inspect, and interact with live servers — so the LLM can query a local inference server or trigger TTS playback without leaving the coding session.
+An included skill at [`.claude/skills/cpipe/SKILL.md`](.claude/skills/cpipe/SKILL.md) teaches Claude Code how to use `cpipe` to discover, inspect, and interact with live servers — so the LLM can query a local inference server or trigger TTS playback without leaving the coding session.
 
 ## Resources
 

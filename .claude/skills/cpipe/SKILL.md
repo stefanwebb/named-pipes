@@ -1,5 +1,5 @@
 ---
-name: named-pipe-tools
+name: cpipe
 description: Use cpipe to discover, inspect, and send commands to named-pipe tool servers.
 allowed-tools: [Bash]
 ---
