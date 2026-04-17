@@ -1,21 +1,19 @@
 ## New features
 
-- **`STTNamedPipe`** — real-time speech-to-text server over a named pipe; captures the default microphone and streams transcribed tokens and VAD lifecycle events (`speech_start`, `speech_end`) to all subscribers
-- **Voxtral backend** — Voxtral Mini 4B Realtime (6-bit) vendored under `named_pipes/stt/voxtral/`; switched from Whisper to Voxtral Realtime with progressive token streaming
-- **Silero VAD** — replaced RMS silence detection with Silero VAD for more accurate speech onset/end detection
-- **STT callbacks** — `on_token`, `on_speech_start`, `on_speech_end` callbacks and a `stop_event` for clean shutdown of the transcription thread
-- **`ex_stt_pipe` example** — server and subscriber client demonstrating STT broadcast
+- **`ping` command** — built-in health check on every `ToolNamedPipe` server; responds with `"pong"`
+- **`status` command** — built-in state query; responds with the server's current `ToolState` value (e.g. `"running"`)
+- **`ToolState` enum** — `ToolNamedPipe` now tracks its lifecycle state via a `_state` field; base state is `RUNNING`
 
 ## Improvements
 
-- Parallelised STT partial transcriptions via `ThreadPoolExecutor`
-- `STT` optional dependency group added to `pyproject.toml`
+- `cpipe --list`, `--pid`, `--clear` now filter to `tool-*` pipes only, ignoring unrelated FIFOs under `/tmp`
+- `cpipe --pid` prints a progress message before the slow process scan
+- `ToolNamedPipe` loads `SKILL.md` via the concrete subclass's module file (fixes `cpipe chat help` returning wrong content when launched via `cpipe --serve`)
+- Restructured chat and TTS servers into subpackages (`named_pipes/chat/`, `named_pipes/tts/`) matching the STT layout
+- Removed `BasicPipeChannel` and legacy example scripts; `cpipe` and docs updated to reflect `ToolNamedPipe`-only scope
 
-## Infrastructure
+## Infrastructure / Documentation
 
-- Switched CI from pip to `uv`; fixed mlx test skipping on Linux, ruff invocation via `uvx`, and vllm resolution in the pytest step
-
-## Documentation
-
-- Rewrote `README.md` following a highlights-first structure; moved detailed architecture, API reference, and design rationale into a new `DOCS.md`
-- Added `SKILL.md` files for the chat and TTS servers (loaded from the caller's directory)
+- Added `README.md` for chat, STT, and TTS servers covering startup, commands, and `cpipe` examples
+- `ping` and `status` documented in protocol spec (`named-pipe-tools.md`), all `SKILL.md` files, and server READMEs
+- Fixed CI dependency install (`--no-deps` dropped; now installs via `.[dev]` to include `pydantic`)
