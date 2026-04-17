@@ -17,7 +17,7 @@ from named_pipes import text_named_pipe
 mock_vllm = MagicMock()
 sys.modules.setdefault("vllm", mock_vllm)
 
-from named_pipes.chat_named_pipe import ChatNamedPipe, Backend  # noqa: E402
+from named_pipes.chat_named_pipe import Backend, ChatConfig, ChatNamedPipe  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -25,15 +25,23 @@ from named_pipes.chat_named_pipe import ChatNamedPipe, Backend  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-def make_chat_pipe(backend=Backend.VLLM, reply="Hello!", **kwargs):
+def make_chat_pipe(
+    backend=Backend.VLLM, reply="Hello!", backend_kwargs=None, **chatconfig_kwargs
+):
     """Return a ChatNamedPipe with filesystem and backend calls patched."""
     if backend is Backend.VLLM:
         mock_output = MagicMock()
         mock_output.outputs[0].text = reply
         mock_vllm.LLM.return_value.chat.return_value = [mock_output]
 
-    defaults = {"description": "A chat tool", "help_text": "Chat help"}
-    defaults.update(kwargs)
+    config = ChatConfig(
+        name="test-chat",
+        model="mock-model",
+        backend=backend,
+        description=chatconfig_kwargs.get("description", "A chat tool"),
+        help_text=chatconfig_kwargs.get("help_text", "Chat help"),
+        backend_kwargs=backend_kwargs or {},
+    )
 
     with (
         patch.object(text_named_pipe, "ensure_pipe"),
@@ -45,7 +53,7 @@ def make_chat_pipe(backend=Backend.VLLM, reply="Hello!", **kwargs):
             return_value={"connected": [], "orphaned": []},
         ),
     ):
-        pipe = ChatNamedPipe("test-chat", "mock-model", backend=backend, **defaults)
+        pipe = ChatNamedPipe(config)
     return pipe
 
 
@@ -85,7 +93,7 @@ class TestChatNamedPipe:
 
     def test_sampling_params_forwarded(self):
         mock_vllm.reset_mock()
-        make_chat_pipe(temperature=0.7, max_tokens=256)
+        make_chat_pipe(backend_kwargs={"temperature": 0.7, "max_tokens": 256})
 
         mock_vllm.SamplingParams.assert_called_once_with(
             temperature=0.7, max_tokens=256

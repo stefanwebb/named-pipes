@@ -14,7 +14,7 @@ import pytest
 pytest.importorskip("mlx")
 
 import named_pipes.stt.named_pipe as stt_mod
-from named_pipes.stt import STTNamedPipe
+from named_pipes.stt import STTConfig, STTNamedPipe
 from named_pipes.text_named_pipe import Role, TextNamedPipe
 
 
@@ -81,7 +81,7 @@ def _collect_messages(path: str, count: int, timeout: float = 2.0) -> list[dict]
 
 
 def test_construct_starts_worker_with_callbacks(stub):
-    pipe = STTNamedPipe("stt-test")
+    pipe = STTNamedPipe(STTConfig(name="stt-test"))
     try:
         assert stub.entered.wait(timeout=2.0), "worker thread never started"
         assert callable(stub.on_token)
@@ -93,7 +93,7 @@ def test_construct_starts_worker_with_callbacks(stub):
 
 
 def test_on_token_broadcasts_result_json(stub):
-    with STTNamedPipe("stt-test") as pipe:
+    with STTNamedPipe(STTConfig(name="stt-test")) as pipe:
         pipe.listen()
         assert stub.entered.wait(timeout=2.0)
 
@@ -114,7 +114,7 @@ def test_on_token_broadcasts_result_json(stub):
 
 
 def test_on_speaking_events_broadcast_speech_start_end(stub):
-    with STTNamedPipe("stt-test") as pipe:
+    with STTNamedPipe(STTConfig(name="stt-test")) as pipe:
         pipe.listen()
         assert stub.entered.wait(timeout=2.0)
 
@@ -139,7 +139,7 @@ def test_on_speaking_events_broadcast_speech_start_end(stub):
 
 
 def test_close_sets_stop_event_and_joins_worker(stub):
-    pipe = STTNamedPipe("stt-test")
+    pipe = STTNamedPipe(STTConfig(name="stt-test"))
     assert stub.entered.wait(timeout=2.0)
     pipe._close()
     assert stub.stop_event.is_set()
