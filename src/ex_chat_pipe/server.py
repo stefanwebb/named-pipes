@@ -9,7 +9,7 @@ LLM server: loads Qwen3.5-0.8B via Transformers and serves chat requests
 over a named pipe using the ChatNamedPipe / ToolNamedPipe protocol.
 """
 
-from named_pipes.chat_named_pipe import ChatNamedPipe
+from named_pipes.chat import ChatNamedPipe
 
 
 def main():

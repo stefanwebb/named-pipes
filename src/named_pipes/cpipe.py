@@ -153,6 +153,36 @@ def _resolve_pipe(pipe: str) -> tuple[str, bool]:
     return pipe, last_component.startswith("tool-")
 
 
+_SERVE_CHOICES = ("chat", "tts", "stt")
+
+
+def _serve(kind: str) -> None:
+    """Launch a server with default config and block until interrupted."""
+    if kind == "chat":
+        from named_pipes.chat import ChatNamedPipe
+
+        cls, pipe_path = ChatNamedPipe, "/tmp/tool-chat"
+    elif kind == "tts":
+        from named_pipes.tts import TTSNamedPipe
+
+        cls, pipe_path = TTSNamedPipe, "/tmp/tool-tts"
+    elif kind == "stt":
+        from named_pipes.stt import STTNamedPipe
+
+        cls, pipe_path = STTNamedPipe, "/tmp/tool-stt"
+    else:
+        print(f"cpipe: unknown server type {kind!r}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        with cls() as ch:
+            done = ch.listen()
+            print(f"{kind.upper()} server listening on {pipe_path} ...")
+            done.wait()
+    except KeyboardInterrupt:
+        print(f"\n{kind.upper()} server shutting down.")
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="cpipe",
@@ -160,6 +190,9 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:
+  cpipe --serve chat                           start the chat server with defaults
+  cpipe --serve tts                            start the TTS server with defaults
+  cpipe --serve stt                            start the STT server with defaults
   cpipe --list                                 list all named pipes under /tmp
   cpipe --list /var/tmp                        list named pipes under /var/tmp
   cpipe --pid                                  list pipes with PIDs under /tmp
@@ -243,6 +276,12 @@ Examples:
         help="print sent messages and status to stderr",
     )
     parser.add_argument(
+        "--serve",
+        metavar="TYPE",
+        choices=_SERVE_CHOICES,
+        help="start a server with default config: chat, tts, or stt",
+    )
+    parser.add_argument(
         "--list",
         metavar="DIR",
         nargs="?",
@@ -265,7 +304,11 @@ Examples:
     )
     args = parser.parse_args(argv)
 
-    # --list, --pid, and --clear are standalone modes; PIPE and CMD are not required.
+    # Standalone modes — PIPE and CMD are not required.
+    if args.serve is not None:
+        _serve(args.serve)
+        return
+
     if args.list is not None:
         _list_pipes(args.list)
         return

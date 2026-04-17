@@ -10,7 +10,7 @@ real time, receiving text tokens over a named pipe using the TTSNamedPipe
 protocol.
 """
 
-from named_pipes.tts_named_pipe import TTSNamedPipe
+from named_pipes.tts import TTSNamedPipe
 
 
 def main():

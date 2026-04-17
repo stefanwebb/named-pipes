@@ -17,7 +17,7 @@ from named_pipes import text_named_pipe
 mock_vllm = MagicMock()
 sys.modules.setdefault("vllm", mock_vllm)
 
-from named_pipes.chat_named_pipe import Backend, ChatConfig, ChatNamedPipe  # noqa: E402
+from named_pipes.chat import Backend, ChatConfig, ChatNamedPipe  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
