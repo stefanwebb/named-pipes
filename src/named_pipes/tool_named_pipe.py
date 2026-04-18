@@ -22,6 +22,7 @@ from named_pipes.utils import scan_pipes
 
 class ToolState(Enum):
     RUNNING = "running"
+    STOPPING = "stopping"
 
 
 class ToolNamedPipe(TextNamedPipe):
@@ -56,7 +57,7 @@ class ToolNamedPipe(TextNamedPipe):
             skill_md = Path(subclass_file).parent / "SKILL.md"
             help_text = skill_md.read_text() if skill_md.exists() else description
         self._help_text = help_text
-        self._state = ToolState.RUNNING
+        self.set_state(ToolState.RUNNING)
         self._handlers: dict[str, callable] = {}
 
         # On startup, remove orphaned tool pipes left by crashed servers/clients.
@@ -72,6 +73,14 @@ class ToolNamedPipe(TextNamedPipe):
                         os.remove(orphan)
                     except OSError:
                         pass
+
+    # --- state management ---
+
+    def set_state(self, state: ToolState):
+        self._state = state
+        self.broadcast_message(
+            json.dumps({"event": "state_changed", "state": state.value})
+        )
 
     # --- decorator for custom commands ---
 
@@ -124,6 +133,7 @@ class ToolNamedPipe(TextNamedPipe):
                 self.send_response(self._state.value, pid)
 
             case "exit":
+                self.set_state(ToolState.STOPPING)
                 self.broadcast_message(json.dumps({"result": "exiting"}))
                 self.stop()
 

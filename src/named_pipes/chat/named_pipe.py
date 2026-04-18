@@ -27,12 +27,21 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from named_pipes.tool_named_pipe import ToolNamedPipe, Role
+from named_pipes.tool_named_pipe import ToolNamedPipe, ToolState, Role
 
 
 class Backend(Enum):
     VLLM = "vllm"
     TRANSFORMERS = "transformers"
+
+
+class ChatState(Enum):
+    RUNNING = ToolState.RUNNING.value
+    STOPPING = ToolState.STOPPING.value
+    LOADING = "loading"
+    IDLE = "idle"
+    INFERRING = "inferring"
+    ERROR = "error"
 
 
 class ChatConfig(BaseModel):
@@ -79,14 +88,21 @@ class ChatNamedPipe(ToolNamedPipe):
             description=config.description,
             help_text=config.help_text,
         )
+        self.set_state(ChatState.LOADING)
 
-        match config.backend:
-            case Backend.VLLM:
-                self._init_vllm(config.model, **config.backend_kwargs)
-            case Backend.TRANSFORMERS:
-                self._init_transformers(config.model, **config.backend_kwargs)
-            case _:
-                raise ValueError(f"unknown backend: {config.backend!r}")
+        try:
+            match config.backend:
+                case Backend.VLLM:
+                    self._init_vllm(config.model, **config.backend_kwargs)
+                case Backend.TRANSFORMERS:
+                    self._init_transformers(config.model, **config.backend_kwargs)
+                case _:
+                    raise ValueError(f"unknown backend: {config.backend!r}")
+        except Exception:
+            self.set_state(ChatState.ERROR)
+            raise
+
+        self.set_state(ChatState.IDLE)
 
         @self.handler("chat")
         def on_chat(msg: dict, pid: int | None):
@@ -137,9 +153,15 @@ class ChatNamedPipe(ToolNamedPipe):
         # vLLM's synchronous LLM class does not expose token-level streaming;
         # fall back to returning the full response as a single chunk.
         def infer_stream(messages, pid):
-            text = infer(messages)
-            self._send_chunk(text, pid)
-            self._send_stream_done(pid)
+            self.set_state(ChatState.INFERRING)
+            try:
+                text = infer(messages)
+                self._send_chunk(text, pid)
+                self._send_stream_done(pid)
+            except Exception:
+                self.set_state(ChatState.ERROR)
+                raise
+            self.set_state(ChatState.IDLE)
 
         self._infer_stream = infer_stream
 
@@ -179,26 +201,32 @@ class ChatNamedPipe(ToolNamedPipe):
         self._infer = infer
 
         def infer_stream(messages, pid):
-            encoded = self._tokenizer.apply_chat_template(
-                messages,
-                tokenize=True,
-                add_generation_prompt=True,
-                return_tensors="pt",
-                return_dict=True,
-            ).to(device)
-            streamer = TextIteratorStreamer(
-                self._tokenizer,
-                skip_prompt=True,
-                skip_special_tokens=True,
-            )
-            gen_kwargs = {**encoded, **generation_kwargs, "streamer": streamer}
-            thread = threading.Thread(
-                target=self._model.generate, kwargs=gen_kwargs, daemon=True
-            )
-            thread.start()
-            for chunk in streamer:
-                if chunk:
-                    self._send_chunk(chunk, pid)
-            self._send_stream_done(pid)
+            self.set_state(ChatState.INFERRING)
+            try:
+                encoded = self._tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=True,
+                    add_generation_prompt=True,
+                    return_tensors="pt",
+                    return_dict=True,
+                ).to(device)
+                streamer = TextIteratorStreamer(
+                    self._tokenizer,
+                    skip_prompt=True,
+                    skip_special_tokens=True,
+                )
+                gen_kwargs = {**encoded, **generation_kwargs, "streamer": streamer}
+                thread = threading.Thread(
+                    target=self._model.generate, kwargs=gen_kwargs, daemon=True
+                )
+                thread.start()
+                for chunk in streamer:
+                    if chunk:
+                        self._send_chunk(chunk, pid)
+                self._send_stream_done(pid)
+            except Exception:
+                self.set_state(ChatState.ERROR)
+                raise
+            self.set_state(ChatState.IDLE)
 
         self._infer_stream = infer_stream
