@@ -73,6 +73,19 @@ The `messages` array follows the OpenAI chat format:
 ]
 ```
 
+## States
+
+The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `status` command returns the current state.
+
+| State | When |
+|-------|------|
+| `running` | Server process started |
+| `loading` | Model weights are being loaded |
+| `idle` | Model loaded; no inference in progress |
+| `inferring` | Generating tokens (streaming or blocking) |
+| `stopping` | `stop` command received; shutting down |
+| `error` | Unrecoverable error during load or inference |
+
 ## Examples
 
 ```bash

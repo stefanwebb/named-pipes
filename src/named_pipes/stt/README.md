@@ -31,9 +31,28 @@ STT server listening on /tmp/tool-stt ...
 
 The STT server has no custom request commands — it is producer-only. Transcription output is broadcast to all subscribers automatically while audio is detected.
 
+## States
+
+The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `status` command returns the current state.
+
+| State | When |
+|-------|------|
+| `running` | Server process started |
+| `loading` | ASR and VAD models are being loaded |
+| `listening` | Models loaded; waiting for speech to begin |
+| `transcribing` | Speech detected; decoding tokens |
+| `stopping` | `stop` command received; shutting down |
+| `error` | Unrecoverable error |
+
 ## Broadcast messages
 
-While subscribed, a client receives the following messages for each utterance:
+While subscribed, a client receives the following messages. State transitions (`state_changed`) are interleaved with transcription events:
+
+| Message | When |
+|---|---|
+| `{"event": "state_changed", "state": "<value>"}` | Server state changes (see States above) |
+
+Per utterance:
 
 | Message | When |
 |---|---|

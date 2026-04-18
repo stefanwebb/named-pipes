@@ -31,6 +31,19 @@ TTS server listening on /tmp/tool-tts ...
 | `help` | Full help text |
 | `stop` | Shut the server down gracefully |
 
+## States
+
+The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `status` command returns the current state.
+
+| State | When |
+|-------|------|
+| `running` | Server process started |
+| `loading` | TTS model is being loaded |
+| `idle` | Model loaded; sentence queue is empty |
+| `synthesizing` | Generating audio for a queued sentence |
+| `stopping` | `stop` command received; shutting down |
+| `error` | Unrecoverable error during load |
+
 ### `text` — append tokens to the synthesis buffer
 
 Appends text to the internal buffer. When a sentence boundary (`.`, `!`, or `?` followed by whitespace) is detected, the sentence is synthesised and played automatically. No response is sent.
