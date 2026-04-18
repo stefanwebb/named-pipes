@@ -1,19 +1,16 @@
 ## New features
 
-- **`ping` command** — built-in health check on every `ToolNamedPipe` server; responds with `"pong"`
-- **`status` command** — built-in state query; responds with the server's current `ToolState` value (e.g. `"running"`)
-- **`ToolState` enum** — `ToolNamedPipe` now tracks its lifecycle state via a `_state` field; base state is `RUNNING`
+- **`STTState` enum** — `STTNamedPipe` now tracks lifecycle state: `loading` (models loading), `listening` (waiting for speech), `transcribing` (speech detected, decoding tokens), `error`
+- **`TTSState` enum** — `TTSNamedPipe` now tracks lifecycle state: `loading` (model loading), `idle` (queue empty), `synthesizing` (generating audio for a sentence), `error`
+- **`verbose` flag** — `ChatConfig`, `STTConfig`, and `TTSConfig` each gain a `verbose: bool = False` field; when enabled, servers print inference output and progress to stdout
 
 ## Improvements
 
-- `cpipe --list`, `--pid`, `--clear` now filter to `tool-*` pipes only, ignoring unrelated FIFOs under `/tmp`
-- `cpipe --pid` prints a progress message before the slow process scan
-- `ToolNamedPipe` loads `SKILL.md` via the concrete subclass's module file (fixes `cpipe chat help` returning wrong content when launched via `cpipe --serve`)
-- Restructured chat and TTS servers into subpackages (`named_pipes/chat/`, `named_pipes/tts/`) matching the STT layout
-- Removed `BasicPipeChannel` and legacy example scripts; `cpipe` and docs updated to reflect `ToolNamedPipe`-only scope
+- **Handler refactor** — `ChatNamedPipe` and `ToolNamedPipe` built-in handlers moved from inline closures to named methods (`_handle_chat`, `_handle_chat_blocking`, `_register_builtin_handlers`), making them independently testable
+- **`on_ready` callback** — `stream_transcribe` now accepts an optional `on_ready` callback invoked after both the Voxtral ASR model and Silero VAD finish loading, used by `STTNamedPipe` to transition from `loading` to `listening`
+- **`state_changed` broadcasts** — all three concrete servers (`chat`, `stt`, `tts`) now broadcast `{"event": "state_changed", "state": "<value>"}` to subscribers on every state transition
 
 ## Infrastructure / Documentation
 
-- Added `README.md` for chat, STT, and TTS servers covering startup, commands, and `cpipe` examples
-- `ping` and `status` documented in protocol spec (`named-pipe-tools.md`), all `SKILL.md` files, and server READMEs
-- Fixed CI dependency install (`--no-deps` dropped; now installs via `.[dev]` to include `pydantic`)
+- **Protocol spec** (`named-pipe-tools.md`) — new "Tool State" section documenting the `state_changed` broadcast, base states, and extended states for all three tools
+- **Tool READMEs** (`chat`, `stt`, `tts`) — each README now includes a States section describing valid state values and when each occurs
