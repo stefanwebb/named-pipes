@@ -41,6 +41,7 @@ class STTConfig(BaseModel):
     temperature: float = 0.0
     vad_onset: int = 2
     vad_offset: int = 32
+    verbose: bool = False
 
 
 class STTNamedPipe(ToolNamedPipe):
@@ -68,6 +69,7 @@ class STTNamedPipe(ToolNamedPipe):
                 "temperature": config.temperature,
                 "vad_onset": config.vad_onset,
                 "vad_offset": config.vad_offset,
+                "verbose": config.verbose,
                 "on_token": self._on_token,
                 "on_speaking_started": self._on_start,
                 "on_speaking_finished": self._on_end,

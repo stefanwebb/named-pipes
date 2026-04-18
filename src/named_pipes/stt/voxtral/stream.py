@@ -70,6 +70,7 @@ def stream_transcribe(
     on_token: Optional[Callable[[str], None]] = None,
     on_ready: Optional[Callable[[], None]] = None,
     stop_event: Optional[threading.Event] = None,
+    verbose: bool = True,
 ):
     model, sp, config = load_model(model_path)
 
@@ -87,7 +88,8 @@ def stream_transcribe(
     n_layers = len(model.language_model.layers)
     sliding_window = 8192
 
-    print("Loading VAD...", flush=True)
+    if verbose:
+        print("Loading VAD...", flush=True)
     vad_model = load_vad()
 
     if on_ready is not None:

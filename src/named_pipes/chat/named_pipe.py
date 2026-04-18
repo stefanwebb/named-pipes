@@ -51,6 +51,7 @@ class ChatConfig(BaseModel):
     description: str = "LLM chat server over a named pipe."
     help_text: str | None = None
     backend_kwargs: dict = {"max_new_tokens": 256, "do_sample": False}
+    verbose: bool = False
 
 
 class ChatNamedPipe(ToolNamedPipe):

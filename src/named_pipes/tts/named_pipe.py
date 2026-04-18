@@ -67,6 +67,7 @@ class TTSConfig(BaseModel):
     sample_rate: int = SAMPLE_RATE
     blocksize: int = BLOCKSIZE
     model_id: str = MODEL_ID
+    verbose: bool = False
 
 
 # Sentence boundary: . ! ? followed by whitespace or end-of-string.
@@ -95,6 +96,7 @@ class TTSNamedPipe(ToolNamedPipe):
         self._voice = config.voice
         self._sample_rate = config.sample_rate
         self._blocksize = config.blocksize
+        self._verbose = config.verbose
 
         # Text accumulation buffer (accessed only from the listener thread).
         self._buf = ""
@@ -109,7 +111,8 @@ class TTSNamedPipe(ToolNamedPipe):
 
         self.set_state(TTSState.LOADING)
         try:
-            print(f"[TTS] Loading model {config.model_id!r}…")
+            if self._verbose:
+                print(f"[TTS] Loading model {config.model_id!r}…")
             self._model = load_model(config.model_id)
         except Exception:
             self.set_state(TTSState.ERROR)
@@ -129,7 +132,8 @@ class TTSNamedPipe(ToolNamedPipe):
             callback=self._audio_callback,
         )
         self._stream.start()
-        print("[TTS] Audio stream started.")
+        if self._verbose:
+            print("[TTS] Audio stream started.")
 
         self.set_state(TTSState.IDLE)
 
@@ -173,7 +177,8 @@ class TTSNamedPipe(ToolNamedPipe):
                 self._audio_queue.put(None)
                 return
             self.set_state(TTSState.SYNTHESIZING)
-            print(f"  [TTS] synthesising: {sentence!r}")
+            if self._verbose:
+                print(f"  [TTS] synthesising: {sentence!r}")
             for result in self._model.generate(
                 sentence, voice=self._voice, lang_code="a", speed=1.0
             ):
