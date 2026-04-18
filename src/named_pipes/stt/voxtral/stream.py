@@ -68,6 +68,7 @@ def stream_transcribe(
     on_speaking_started=lambda: print("\non_speaking_started", flush=True),
     on_speaking_finished=lambda: print("on_speaking_finished", flush=True),
     on_token: Optional[Callable[[str], None]] = None,
+    on_ready: Optional[Callable[[], None]] = None,
     stop_event: Optional[threading.Event] = None,
 ):
     model, sp, config = load_model(model_path)
@@ -88,6 +89,9 @@ def stream_transcribe(
 
     print("Loading VAD...", flush=True)
     vad_model = load_vad()
+
+    if on_ready is not None:
+        on_ready()
 
     def sample(logits):
         if temperature <= 0:

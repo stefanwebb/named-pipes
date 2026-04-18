@@ -122,7 +122,7 @@ def test_on_speaking_events_broadcast_speech_start_end(stub):
         done = threading.Event()
 
         def run():
-            collected.extend(_collect_messages("/tmp/tool-stt-test", count=2))
+            collected.extend(_collect_messages("/tmp/tool-stt-test", count=4))
             done.set()
 
         reader = threading.Thread(target=run, daemon=True)
@@ -132,7 +132,10 @@ def test_on_speaking_events_broadcast_speech_start_end(stub):
         stub.on_end()
         done.wait(timeout=2.0)
 
-        assert collected == [
+        speech_events = [
+            m for m in collected if m.get("event") in ("speech_start", "speech_end")
+        ]
+        assert speech_events == [
             {"event": "speech_start"},
             {"event": "speech_end"},
         ]

@@ -30,6 +30,7 @@ Supported commands (in addition to ToolNamedPipe builtins):
 import queue
 import re
 import threading
+from enum import Enum
 
 import numpy as np
 import sounddevice as sd
@@ -38,7 +39,17 @@ from pydantic import BaseModel
 from mlx_audio.tts.utils import load_model
 
 from named_pipes.text_named_pipe import Role
-from named_pipes.tool_named_pipe import ToolNamedPipe
+from named_pipes.tool_named_pipe import ToolNamedPipe, ToolState
+
+
+class TTSState(Enum):
+    RUNNING = ToolState.RUNNING.value
+    STOPPING = ToolState.STOPPING.value
+    LOADING = "loading"
+    IDLE = "idle"
+    SYNTHESIZING = "synthesizing"
+    ERROR = "error"
+
 
 # ---------------------------------------------------------------------------
 # Config
@@ -96,9 +107,13 @@ class TTSNamedPipe(ToolNamedPipe):
         self._remainder = np.zeros(0, dtype=np.float32)
         self._audio_done = threading.Event()
 
-        # Load model and start the TTS worker thread.
-        print(f"[TTS] Loading model {config.model_id!r}…")
-        self._model = load_model(config.model_id)
+        self.set_state(TTSState.LOADING)
+        try:
+            print(f"[TTS] Loading model {config.model_id!r}…")
+            self._model = load_model(config.model_id)
+        except Exception:
+            self.set_state(TTSState.ERROR)
+            raise
 
         self._tts_thread = threading.Thread(
             target=self._tts_worker, daemon=True, name="tts-worker"
@@ -115,6 +130,8 @@ class TTSNamedPipe(ToolNamedPipe):
         )
         self._stream.start()
         print("[TTS] Audio stream started.")
+
+        self.set_state(TTSState.IDLE)
 
         # Register protocol handlers.
         self.handler("text")(self._handle_text)
@@ -150,10 +167,12 @@ class TTSNamedPipe(ToolNamedPipe):
     def _tts_worker(self) -> None:
         """Synthesise sentences from sentence_queue and push audio to audio_queue."""
         while True:
+            self.set_state(TTSState.IDLE)
             sentence = self._sentence_queue.get()
             if sentence is None:
                 self._audio_queue.put(None)
                 return
+            self.set_state(TTSState.SYNTHESIZING)
             print(f"  [TTS] synthesising: {sentence!r}")
             for result in self._model.generate(
                 sentence, voice=self._voice, lang_code="a", speed=1.0

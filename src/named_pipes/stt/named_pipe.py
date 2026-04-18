@@ -17,12 +17,22 @@ commands — it is producer-only.
 
 import json
 import threading
+from enum import Enum
 
 from pydantic import BaseModel
 
 from named_pipes.stt.voxtral.stream import stream_transcribe
 from named_pipes.text_named_pipe import Role
-from named_pipes.tool_named_pipe import ToolNamedPipe
+from named_pipes.tool_named_pipe import ToolNamedPipe, ToolState
+
+
+class STTState(Enum):
+    RUNNING = ToolState.RUNNING.value
+    STOPPING = ToolState.STOPPING.value
+    LOADING = "loading"
+    LISTENING = "listening"
+    TRANSCRIBING = "transcribing"
+    ERROR = "error"
 
 
 class STTConfig(BaseModel):
@@ -47,6 +57,7 @@ class STTNamedPipe(ToolNamedPipe):
             Role.SERVER,
             description="Real-time speech-to-text server over a named pipe.",
         )
+        self.set_state(STTState.LOADING)
         self._stop_event = threading.Event()
         self._broadcast_lock = threading.Lock()
 
@@ -60,6 +71,7 @@ class STTNamedPipe(ToolNamedPipe):
                 "on_token": self._on_token,
                 "on_speaking_started": self._on_start,
                 "on_speaking_finished": self._on_end,
+                "on_ready": self._on_ready,
                 "stop_event": self._stop_event,
             },
             daemon=True,
@@ -67,15 +79,20 @@ class STTNamedPipe(ToolNamedPipe):
         )
         self._worker.start()
 
+    def _on_ready(self) -> None:
+        self.set_state(STTState.LISTENING)
+
     def _on_token(self, text: str) -> None:
         with self._broadcast_lock:
             self.broadcast_message(json.dumps({"result": text}))
 
     def _on_start(self) -> None:
+        self.set_state(STTState.TRANSCRIBING)
         with self._broadcast_lock:
             self.broadcast_message(json.dumps({"event": "speech_start"}))
 
     def _on_end(self) -> None:
+        self.set_state(STTState.LISTENING)
         with self._broadcast_lock:
             self.broadcast_message(json.dumps({"event": "speech_end"}))
 
