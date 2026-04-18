@@ -89,6 +89,7 @@ class ChatNamedPipe(ToolNamedPipe):
             description=config.description,
             help_text=config.help_text,
         )
+        self._verbose = config.verbose
         self.set_state(ChatState.LOADING)
 
         try:
@@ -125,6 +126,8 @@ class ChatNamedPipe(ToolNamedPipe):
     def _handle_chat_blocking(self, msg: dict, pid: int | None):
         messages = msg.get("messages", [])
         reply = self._infer(messages)
+        if self._verbose:
+            print(reply, flush=True)
         self.send_response(reply, pid)
 
     # -----------------------------------------------------------------------
@@ -133,10 +136,14 @@ class ChatNamedPipe(ToolNamedPipe):
 
     def _send_chunk(self, text: str, pid: int | None):
         """Send one streaming chunk to *pid*."""
+        if self._verbose:
+            print(text, end="", flush=True)
         self.send_message(json.dumps({"result": text, "done": False}), pid)
 
     def _send_stream_done(self, pid: int | None):
         """Send the end-of-stream sentinel to *pid*."""
+        if self._verbose:
+            print(flush=True)
         self.send_message(json.dumps({"result": "", "done": True}), pid)
 
     # -----------------------------------------------------------------------
