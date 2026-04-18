@@ -31,7 +31,7 @@ class ToolNamedPipe(TextNamedPipe):
     Server (tool) side:
         Listens on ``/tmp/tool-{name}`` for JSON commands from clients.
         Automatically handles ``subscribe``, ``unsubscribe``, ``description``,
-        ``help``, and ``exit``.  Custom commands are registered with the
+        ``help``, and ``stop``.  Custom commands are registered with the
         ``@tool.handler("CMD")`` decorator.
 
     Client side:
@@ -132,9 +132,9 @@ class ToolNamedPipe(TextNamedPipe):
             case "status":
                 self.send_response(self._state.value, pid)
 
-            case "exit":
+            case "stop":
                 self.set_state(ToolState.STOPPING)
-                self.broadcast_message(json.dumps({"result": "exiting"}))
+                self.broadcast_message(json.dumps({"result": "stopping"}))
                 self.stop()
 
             case _:

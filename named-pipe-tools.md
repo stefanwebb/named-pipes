@@ -26,7 +26,7 @@ Each tool exposes two named pipes:
 
 | Resource | Created by | Deleted by |
 |----------|-----------|------------|
-| Upstream pipe | Tool | Tool (on exit) |
+| Upstream pipe | Tool | Tool (on stop) |
 | Downstream pipe (`-{pid}`) | Client | Client (on disconnect) |
 
 ### Subscription Flow
@@ -44,7 +44,7 @@ All messages are **JSON objects**, one per write.
 
 ### Rule
 
-For every message received **except `unsubscribe`**, the tool must write a response to the **sender's** downstream pipe only (identified by the `pid` field). The sole exception is the `exit` response: the tool broadcasts `{ "result": "exiting" }` to **all** subscribed clients before shutting down.
+For every message received **except `unsubscribe`**, the tool must write a response to the **sender's** downstream pipe only (identified by the `pid` field). The sole exception is the `stop` response: the tool broadcasts `{ "result": "stopping" }` to **all** subscribed clients before shutting down.
 
 ### Required Commands
 
@@ -107,18 +107,18 @@ Returns the tool's current state as a string (e.g. `"running"`). Subclasses may 
 { "result": "<content of SKILL.md>" }
 ```
 
-#### `exit`
+#### `stop`
 ```json
 // Request
-{ "pid": 1234, "cmd": "exit" }
+{ "pid": 1234, "cmd": "stop" }
 
 // Response (broadcast to ALL subscribers, then tool shuts down)
-{ "result": "exiting" }
+{ "result": "stopping" }
 
 // Response (if rejected, to sender only)
 { "result": "rejected" }
 ```
-If the tool honors the request, it broadcasts `{ "result": "exiting" }` to **all** subscribed clients before shutting down.
+If the tool honors the request, it broadcasts `{ "result": "stopping" }` to **all** subscribed clients before shutting down.
 
 ### Custom Commands
 

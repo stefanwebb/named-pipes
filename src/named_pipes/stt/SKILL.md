@@ -14,7 +14,7 @@ Pipe: `/tmp/tool-stt`
 | `status` | `{"pid": <int>, "cmd": "status"}` | `{"result": "<state>"}` e.g. `"running"` |
 | `description` | `{"pid": <int>, "cmd": "description"}` | `{"result": "<one-line description>"}` |
 | `help` | `{"pid": <int>, "cmd": "help"}` | `{"result": "<this text>"}` |
-| `exit` | `{"pid": <int>, "cmd": "exit"}` | `{"result": "exiting"}` broadcast to all subscribers, then server exits |
+| `stop` | `{"pid": <int>, "cmd": "stop"}` | `{"result": "stopping"}` broadcast to all subscribers, then server exits |
 
 ## Broadcasts
 
@@ -34,6 +34,6 @@ Tokens are sub-word pieces as produced by the Voxtral tokenizer — subscribers 
 2. Subscribe.
 3. Speak into the system default microphone.
 4. Receive a stream of `speech_start` / `result` / `speech_end` messages per utterance.
-5. Send `unsubscribe` when done; send `exit` to shut the server down cleanly.
+5. Send `unsubscribe` when done; send `stop` to shut the server down cleanly.
 
 Audio capture uses the system default input device; there is no audio returned over the pipe, only text.

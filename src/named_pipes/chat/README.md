@@ -27,7 +27,7 @@ CHAT server listening on /tmp/tool-chat ...
 | `status` | Current server state (e.g. `running`) |
 | `description` | One-line description of the server |
 | `help` | Full help text (this file) |
-| `exit` | Shut the server down gracefully |
+| `stop` | Shut the server down gracefully |
 
 ### Chat commands
 
@@ -92,5 +92,5 @@ cpipe chat chat_blocking -j '{"messages": [{"role": "user", "content": "What is 
 cpipe chat chat -j '{"messages": [{"role": "user", "content": "My name is Alice"}, {"role": "assistant", "content": "Nice to meet you, Alice!"}, {"role": "user", "content": "What is my name?"}]}'
 
 # Shut down the server
-cpipe chat exit
+cpipe chat stop
 ```

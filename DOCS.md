@@ -77,7 +77,7 @@ Each client subscribes with its PID, and the server creates a dedicated downstre
 
 ### ToolNamedPipe
 
-`ToolNamedPipe` extends `TextNamedPipe` with a standardized protocol for building **agentic tools** — persistent server processes that expose capabilities to one or more clients (e.g. an agent). It defines a set of built-in commands (`subscribe`, `unsubscribe`, `description`, `help`, `exit`) and allows tools to register custom commands via a decorator.
+`ToolNamedPipe` extends `TextNamedPipe` with a standardized protocol for building **agentic tools** — persistent server processes that expose capabilities to one or more clients (e.g. an agent). It defines a set of built-in commands (`subscribe`, `unsubscribe`, `description`, `help`, `stop`) and allows tools to register custom commands via a decorator.
 
 The full protocol specification is in [`named-pipe-tools.md`](named-pipe-tools.md).
 

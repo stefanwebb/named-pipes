@@ -27,7 +27,7 @@ STT server listening on /tmp/tool-stt ...
 | `status` | Current server state (e.g. `running`) |
 | `description` | One-line description of the server |
 | `help` | Full help text |
-| `exit` | Shut the server down gracefully |
+| `stop` | Shut the server down gracefully |
 
 The STT server has no custom request commands — it is producer-only. Transcription output is broadcast to all subscribers automatically while audio is detected.
 
@@ -56,7 +56,7 @@ cpipe stt description
 cpipe stt subscribe --no-wait
 
 # Shut down the server
-cpipe stt exit
+cpipe stt stop
 ```
 
 > **Note:** `cpipe` is designed for one-shot command/response use. For continuous transcription in production code, subscribe directly using `STTNamedPipe` or `TextNamedPipe` in a Python client (see `src/examples/stt_client.py`).

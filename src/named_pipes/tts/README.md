@@ -29,7 +29,7 @@ TTS server listening on /tmp/tool-tts ...
 | `status` | Current server state (e.g. `running`) |
 | `description` | One-line description of the server |
 | `help` | Full help text |
-| `exit` | Shut the server down gracefully |
+| `stop` | Shut the server down gracefully |
 
 ### `text` — append tokens to the synthesis buffer
 
@@ -79,7 +79,7 @@ cpipe tts text -d "Hello! How are you today? I hope you are well." --no-wait
 cpipe tts flush --no-wait
 
 # Shut down the server
-cpipe tts exit
+cpipe tts stop
 ```
 
 > **Note:** `text` and `flush` do not return a response, so use `--no-wait` to avoid a timeout. For LLM-to-TTS pipelines, see `src/examples/tts_client.py`.

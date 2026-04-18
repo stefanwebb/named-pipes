@@ -215,7 +215,7 @@ Examples:
   cpipe --clear /var/tmp                       delete orphaned tool pipes under /var/tmp
   cpipe chat description                       get tool description
   cpipe /tmp/tool-chat help                    get help text
-  cpipe chat exit                              shut down the server
+  cpipe chat stop                              shut down the server
   cpipe chat ping                              send a custom command
   cpipe chat greet -d Alice                    send data with a command
   cpipe chat chat -j '{"messages":[...]}'      merge extra JSON fields

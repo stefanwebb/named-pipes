@@ -35,7 +35,7 @@ cpipe chat ping                 # health check — responds with "pong"
 cpipe chat status               # current state of the server (e.g. "running")
 cpipe chat description          # one-line description of the tool
 cpipe chat help                 # full help text (SKILL.md content)
-cpipe chat exit                 # shut the server down gracefully
+cpipe chat stop                 # shut the server down gracefully
 ```
 
 ### Sending data
@@ -71,6 +71,6 @@ cpipe chat description                               # what does this tool do?
 cpipe chat help                                      # full API reference
 cpipe tts text -d "Hello, world"                     # send a text chunk to the TTS server
 cpipe tts flush                                      # drain the TTS buffer
-cpipe chat exit                                      # shut down the LLM server
+cpipe chat stop                                      # shut down the LLM server
 cpipe --clear                                        # clean up stale pipes after a crash
 ```

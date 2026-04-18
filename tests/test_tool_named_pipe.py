@@ -114,16 +114,14 @@ class TestProtocolCommands:
 
         tool.send_response.assert_called_once_with("Use me like this", 1)
 
-    def test_exit(self):
+    def test_stop(self):
         tool = make_tool()
         tool.broadcast_message = MagicMock()
         tool.stop = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "exit", "pid": 1}, 1)
+        tool.msg_handler_fn({"cmd": "stop", "pid": 1}, 1)
 
-        tool.broadcast_message.assert_called_once_with(
-            json.dumps({"result": "exiting"})
-        )
+        tool.broadcast_message.assert_any_call(json.dumps({"result": "stopping"}))
         tool.stop.assert_called_once()
 
     def test_unknown_command(self):

@@ -14,7 +14,7 @@ Pipe: `/tmp/tool-chat`
 | `status` | `{"pid": <int>, "cmd": "status"}` | `{"result": "<state>"}` e.g. `"running"` |
 | `description` | `{"pid": <int>, "cmd": "description"}` | `{"result": "<one-line description>"}` |
 | `help` | `{"pid": <int>, "cmd": "help"}` | `{"result": "<this text>"}` |
-| `exit` | `{"pid": <int>, "cmd": "exit"}` | `{"result": "exiting"}` broadcast to all subscribers, then server exits |
+| `stop` | `{"pid": <int>, "cmd": "stop"}` | `{"result": "stopping"}` broadcast to all subscribers, then server exits |
 
 ## Chat commands
 
