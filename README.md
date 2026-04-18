@@ -1,5 +1,5 @@
 <div align="center">
-<img src="MascotAnimation.gif" width="100%"></img>
+<img src="https://raw.githubusercontent.com/stefanwebb/named-pipes/main/MascotAnimation.gif" width="75%"></img>
 </div>
 
 <h1 align="center">Named Pipes as Agentic Tools</h1>
