@@ -57,8 +57,9 @@ class ToolNamedPipe(TextNamedPipe):
             skill_md = Path(subclass_file).parent / "SKILL.md"
             help_text = skill_md.read_text() if skill_md.exists() else description
         self._help_text = help_text
-        self.set_state(ToolState.RUNNING)
         self._handlers: dict[str, callable] = {}
+        self._register_builtin_handlers()
+        self.set_state(ToolState.RUNNING)
 
         # On startup, remove orphaned tool pipes left by crashed servers/clients.
         # Only the server owns pipes in the directory; clients create their own
@@ -106,41 +107,44 @@ class ToolNamedPipe(TextNamedPipe):
         """Send ``{"pid": ..., "cmd": ...}`` upstream (client only)."""
         self.send_message(json.dumps({"pid": self._pid, "cmd": cmd}))
 
+    # --- built-in handlers ---
+
+    def _register_builtin_handlers(self):
+        @self.handler("subscribe")
+        def _subscribe(msg, pid):
+            self.subscribe(pid)
+            self.send_response("subscribed", pid)
+
+        @self.handler("unsubscribe")
+        def _unsubscribe(msg, pid):
+            self.unsubscribe(pid)  # No response per protocol spec
+
+        @self.handler("description")
+        def _description(msg, pid):
+            self.send_response(self._description, pid)
+
+        @self.handler("help")
+        def _help(msg, pid):
+            self.send_response(self._help_text, pid)
+
+        @self.handler("ping")
+        def _ping(msg, pid):
+            self.send_response("pong", pid)
+
+        @self.handler("status")
+        def _status(msg, pid):
+            self.send_response(self._state.value, pid)
+
+        @self.handler("stop")
+        def _stop(msg, pid):
+            self.set_state(ToolState.STOPPING)
+            self.broadcast_message(json.dumps({"result": "stopping"}))
+            self.stop()
+
     # --- protocol message handler ---
 
     def msg_handler_fn(self, msg: dict, pid: int | None):
         cmd = msg.get("cmd", "").lower()
-
-        match cmd:
-            case "subscribe":
-                self.subscribe(pid)
-                self.send_response("subscribed", pid)
-
-            case "unsubscribe":
-                self.unsubscribe(pid)
-                # No response per protocol spec
-
-            case "description":
-                self.send_response(self._description, pid)
-
-            case "help":
-                self.send_response(self._help_text, pid)
-
-            case "ping":
-                self.send_response("pong", pid)
-
-            case "status":
-                self.send_response(self._state.value, pid)
-
-            case "stop":
-                self.set_state(ToolState.STOPPING)
-                self.broadcast_message(json.dumps({"result": "stopping"}))
-                self.stop()
-
-            case _:
-                self._dispatch(cmd, msg, pid)
-
-    def _dispatch(self, cmd: str, msg: dict, pid: int | None):
         fn = self._handlers.get(cmd)
         if fn:
             fn(msg, pid)

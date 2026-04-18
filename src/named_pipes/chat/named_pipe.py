@@ -104,23 +104,27 @@ class ChatNamedPipe(ToolNamedPipe):
 
         self.set_state(ChatState.IDLE)
 
-        @self.handler("chat")
-        def on_chat(msg: dict, pid: int | None):
-            # Run inference on a separate thread so the listener loop is not
-            # blocked while tokens are being streamed back to the client.
-            # TODO: two overlapping chat requests from the same client could
-            # interleave their chunks on the downstream pipe — add per-client
-            # request sequencing in a future version.
-            messages = msg.get("messages", [])
-            threading.Thread(
-                target=self._infer_stream, args=(messages, pid), daemon=True
-            ).start()
+        self.handler("chat")(self._handle_chat)
+        self.handler("chat_blocking")(self._handle_chat_blocking)
 
-        @self.handler("chat_blocking")
-        def on_chat_blocking(msg: dict, pid: int | None):
-            messages = msg.get("messages", [])
-            reply = self._infer(messages)
-            self.send_response(reply, pid)
+    # -----------------------------------------------------------------------
+    # Command handlers
+    # -----------------------------------------------------------------------
+    def _handle_chat(self, msg: dict, pid: int | None):
+        # Run inference on a separate thread so the listener loop is not
+        # blocked while tokens are being streamed back to the client.
+        # TODO: two overlapping chat requests from the same client could
+        # interleave their chunks on the downstream pipe — add per-client
+        # request sequencing in a future version.
+        messages = msg.get("messages", [])
+        threading.Thread(
+            target=self._infer_stream, args=(messages, pid), daemon=True
+        ).start()
+
+    def _handle_chat_blocking(self, msg: dict, pid: int | None):
+        messages = msg.get("messages", [])
+        reply = self._infer(messages)
+        self.send_response(reply, pid)
 
     # -----------------------------------------------------------------------
     # Streaming helpers
