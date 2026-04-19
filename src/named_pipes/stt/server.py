@@ -22,7 +22,6 @@ from enum import Enum
 from pydantic import BaseModel
 
 from named_pipes.stt.voxtral.stream import stream_transcribe
-from named_pipes.text_named_pipe import Role
 from named_pipes.tool_server import ToolServer, ToolState
 
 
@@ -55,7 +54,6 @@ class STTServer(ToolServer):
     def __init__(self, config: STTConfig = STTConfig()):
         super().__init__(
             config.name,
-            Role.SERVER,
             description="Real-time speech-to-text server over a named pipe.",
         )
         self.set_state(STTState.LOADING)

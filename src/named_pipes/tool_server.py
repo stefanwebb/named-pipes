@@ -37,13 +37,12 @@ class ToolServer(TextNamedPipe):
     def __init__(
         self,
         name: str,
-        role: Role = Role.SERVER,
         *,
         description: str,
         help_text: str | None = None,
     ):
         pipe_name = f"/tmp/tool-{name}"
-        super().__init__(pipe_name, role)
+        super().__init__(pipe_name, Role.SERVER)
         self._tool_name = name
         self._description = description
         if help_text is None:
@@ -59,16 +58,15 @@ class ToolServer(TextNamedPipe):
         # On startup, remove orphaned tool pipes left by crashed servers/clients.
         # Only the server owns pipes in the directory; clients create their own
         # downstream pipe via TextNamedPipe and clean it up themselves.
-        if role is Role.SERVER:
-            folder = str(Path(pipe_name).parent)
-            tool_prefix = os.path.join(folder, "tool-")
-            result = scan_pipes(folder)
-            for orphan in result["orphaned"]:
-                if orphan.startswith(tool_prefix) and orphan != pipe_name:
-                    try:
-                        os.remove(orphan)
-                    except OSError:
-                        pass
+        folder = str(Path(pipe_name).parent)
+        tool_prefix = os.path.join(folder, "tool-")
+        result = scan_pipes(folder)
+        for orphan in result["orphaned"]:
+            if orphan.startswith(tool_prefix) and orphan != pipe_name:
+                try:
+                    os.remove(orphan)
+                except OSError:
+                    pass
 
     # --- state management ---
 
@@ -97,10 +95,6 @@ class ToolServer(TextNamedPipe):
     def send_response(self, result: str, pid: int | None = None):
         """Send ``{"result": ...}`` to *pid* (or broadcast if *pid* is None)."""
         self.send_message(json.dumps({"result": result}), pid)
-
-    def send_command(self, cmd: str):
-        """Send ``{"pid": ..., "cmd": ...}`` upstream (client only)."""
-        self.send_message(json.dumps({"pid": self._pid, "cmd": cmd}))
 
     # --- built-in handlers ---
 

@@ -1,6 +1,6 @@
 # Named Pipe Tools — Protocol Specification
 
-A system for interprocess communication between a locally running **tool** (server) and one or more **clients** (tool users) via named pipes.
+A system for interprocess communication between a locally running **tool server** (`ToolServer`) and one or more **clients** (`ToolClient`) via named pipes.
 
 ## Why Named Pipes?
 

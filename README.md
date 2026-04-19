@@ -66,12 +66,18 @@ cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello!
 **3. Or write a client in Python:**
 
 ```python
-from named_pipes.tool_named_pipe import ToolServer, Role
+from named_pipes.tool_client import ToolClient
+import threading
 
-with ToolServer("tool-chat", role=Role.CLIENT) as ch:
-    ch.send_message("chat", '{"messages": [{"role":"user","content":"Hello!"}]}')
-    for msg in ch.receive_stream():
-        print(msg)
+class _ChatClient(ToolClient):
+    def on_message(self, msg):
+        if msg.get("done") is not True:
+            print(msg.get("result", ""), end="", flush=True)
+
+done = threading.Event()
+with _ChatClient("chat") as ch:
+    ch.send_command("chat", messages=[{"role": "user", "content": "Hello!"}])
+    done.wait(timeout=30)
 ```
 
 ## Examples

@@ -38,7 +38,6 @@ from pydantic import BaseModel
 
 from mlx_audio.tts.utils import load_model
 
-from named_pipes.text_named_pipe import Role
 from named_pipes.tool_server import ToolServer, ToolState
 
 
@@ -90,7 +89,6 @@ class TTSServer(ToolServer):
     def __init__(self, config: TTSConfig = TTSConfig()):
         super().__init__(
             config.name,
-            Role.SERVER,
             description="Real-time text-to-speech server over a named pipe.",
         )
         self._voice = config.voice

@@ -12,48 +12,36 @@ Requires the STT server to be running first:
     cpipe --serve stt
 """
 
-import json
 import threading
 
-from named_pipes.text_named_pipe import Role, TextNamedPipe
+from named_pipes.tool_client import ToolClient
 
 
-class _STTClient(TextNamedPipe):
-    """Minimal subscriber for the STTServer / ToolServer protocol."""
+class _STTClient(ToolClient):
+    """Subscriber for the STTServer protocol."""
 
     def __init__(self):
-        super().__init__("/tmp/tool-stt", Role.CLIENT)
-        self.subscribed = threading.Event()
+        super().__init__("stt")
 
-    def msg_handler_fn(self, msg: dict, pid: int | None):
-        if msg.get("result") == "subscribed":
-            self.subscribed.set()
-            return
-
+    def on_message(self, msg: dict):
         if "event" in msg:
             event = msg["event"]
             if event == "speech_start":
                 print("\n[speech_start] ", end="", flush=True)
             elif event == "speech_end":
                 print(" [speech_end]", flush=True)
-            return
-
-        if "result" in msg:
+        elif "result" in msg:
             print(msg["result"], end="", flush=True)
 
 
 def main():
     with _STTClient() as stt:
-        stt.listen()
-        stt.send_message(json.dumps({"pid": stt._pid, "cmd": "subscribe"}))
-        stt.subscribed.wait()
         print("Subscribed to /tmp/tool-stt. Speak into the mic; Ctrl+C to stop.")
 
         try:
             threading.Event().wait()
         except KeyboardInterrupt:
             print("\nUnsubscribing.")
-            stt.send_message(json.dumps({"pid": stt._pid, "cmd": "unsubscribe"}))
 
 
 if __name__ == "__main__":

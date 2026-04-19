@@ -13,10 +13,9 @@ Requires both servers to be running before starting this client:
     cpipe --serve tts    (listens on /tmp/tool-tts)
 """
 
-import json
 import threading
 
-from named_pipes.text_named_pipe import Role, TextNamedPipe
+from named_pipes.tool_client import ToolClient
 
 QUERY = [
     {
@@ -27,56 +26,40 @@ QUERY = [
 ]
 
 
-class _LLMClient(TextNamedPipe):
-    """Minimal streaming client for the ToolServer / ChatServer protocol."""
+class _LLMClient(ToolClient):
+    """Streaming client for the ChatServer protocol."""
 
     def __init__(self, on_chunk, on_done):
-        super().__init__("/tmp/tool-chat", Role.CLIENT)
-        self.subscribed = threading.Event()
+        super().__init__("chat")
         self._on_chunk = on_chunk
         self._on_done = on_done
 
-    def msg_handler_fn(self, msg: dict, pid: int | None):
-        if msg.get("result") == "subscribed":
-            self.subscribed.set()
-            return
-
+    def on_message(self, msg: dict):
         if msg.get("done") is True:
             self._on_done()
-            return
-
-        if "done" in msg:
-            # Streaming chunk.
+        elif "done" in msg:
             self._on_chunk(msg.get("result", ""))
 
 
-class _TTSClient(TextNamedPipe):
-    """Minimal client for the TTSServer / ToolServer protocol."""
+class _TTSClient(ToolClient):
+    """Client for the TTSServer protocol."""
 
     def __init__(self):
-        super().__init__("/tmp/tool-tts", Role.CLIENT)
-        self.subscribed = threading.Event()
-
-    def msg_handler_fn(self, msg: dict, pid: int | None):
-        if msg.get("result") == "subscribed":
-            self.subscribed.set()
+        super().__init__("tts")
 
     def send_text(self, token: str):
         """Send a text chunk to the TTS server."""
-        self.send_message(json.dumps({"pid": self._pid, "cmd": "text", "data": token}))
+        self.send_command("text", data=token)
 
     def flush(self):
         """Tell the TTS server to synthesise any remaining buffered text."""
-        self.send_message(json.dumps({"pid": self._pid, "cmd": "flush"}))
+        self.send_command("flush")
 
 
 def main():
     stream_done = threading.Event()
 
     with _TTSClient() as tts:
-        tts.listen()
-        tts.send_message(json.dumps({"pid": tts._pid, "cmd": "subscribe"}))
-        tts.subscribed.wait()
 
         def on_chunk(text: str):
             print(text, end="", flush=True)
@@ -87,22 +70,12 @@ def main():
             stream_done.set()
 
         with _LLMClient(on_chunk, on_done) as llm:
-            llm.listen()
-            llm.send_message(json.dumps({"pid": llm._pid, "cmd": "subscribe"}))
-            llm.subscribed.wait()
-
             print("Subscribed to both servers.")
             print(f"Query: {QUERY[0]['content']!r}\nResponse: ", end="")
-            llm.send_message(
-                json.dumps({"pid": llm._pid, "cmd": "chat", "messages": QUERY})
-            )
+            llm.send_command("chat", messages=QUERY)
 
             stream_done.wait()
             print()  # newline after streamed chunks
-
-            llm.send_message(json.dumps({"pid": llm._pid, "cmd": "unsubscribe"}))
-
-        tts.send_message(json.dumps({"pid": tts._pid, "cmd": "unsubscribe"}))
 
 
 if __name__ == "__main__":

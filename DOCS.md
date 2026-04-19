@@ -11,6 +11,7 @@ Full architecture, API reference, protocol details, and design rationale for the
 - [API reference](#api-reference)
   - [TextNamedPipe and DataNamedPipe](#textnamedpipe-and-datanamedpipe)
   - [ToolServer](#toolserver)
+  - [ToolClient](#toolclient)
   - [ChatServer](#chatserver)
   - [TTSServer](#ttsserver)
   - [STTServer](#sttserver)
@@ -40,8 +41,8 @@ The library builds a hierarchy of abstractions over named pipes, from low-level 
 
 ```
 TextNamedPipe (ABC)   DataNamedPipe (ABC)
-       ↓
-ToolServer
+       ↓                     ↓
+  ToolServer            ToolClient
     ↓       ↓       ↓
 ChatServer  TTSServer  STTServer
 ```
@@ -80,6 +81,35 @@ Each client subscribes with its PID, and the server creates a dedicated downstre
 `ToolServer` extends `TextNamedPipe` with a standardized protocol for building **agentic tools** — persistent server processes that expose capabilities to one or more clients (e.g. an agent). It defines a set of built-in commands (`subscribe`, `unsubscribe`, `description`, `help`, `stop`) and allows tools to register custom commands via a decorator.
 
 The full protocol specification is in [`named-pipe-tools.md`](named-pipe-tools.md).
+
+### ToolClient
+
+`ToolClient` extends `TextNamedPipe` with the client side of the Named Pipe Tools protocol. It connects to a `ToolServer` at `/tmp/tool-{name}`, handles subscribe/unsubscribe automatically via the context manager, and provides `send_command` for building well-formed requests.
+
+Subclass it and override `on_message(msg)` to handle server responses:
+
+```python
+from named_pipes.tool_client import ToolClient
+import threading
+
+class _ChatClient(ToolClient):
+    def __init__(self):
+        super().__init__("chat")
+        self.done = threading.Event()
+
+    def on_message(self, msg):
+        if msg.get("done") is True:
+            self.done.set()
+        elif "done" in msg:
+            print(msg.get("result", ""), end="", flush=True)
+
+with _ChatClient() as client:
+    client.send_command("chat", messages=[{"role": "user", "content": "Hello"}])
+    client.done.wait()
+    print()
+```
+
+The context manager calls `listen()` and `subscribe()` on entry, and `unsubscribe()` on exit. Without the context manager, call these manually.
 
 ### ChatServer
 

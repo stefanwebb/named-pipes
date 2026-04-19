@@ -27,7 +27,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from named_pipes.tool_server import ToolServer, ToolState, Role
+from named_pipes.tool_server import ToolServer, ToolState
 
 
 class Backend(Enum):
@@ -85,7 +85,6 @@ class ChatServer(ToolServer):
     def __init__(self, config: ChatConfig = ChatConfig()):
         super().__init__(
             config.name,
-            Role.SERVER,
             description=config.description,
             help_text=config.help_text,
         )
