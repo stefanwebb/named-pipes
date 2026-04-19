@@ -109,7 +109,7 @@ with ChatNamedPipe(
     done.wait()
 ```
 
-See [`src/ex_chat_pipe/`](src/ex_chat_pipe/) for a working client/server example.
+See [`src/examples/chat_client.py`](src/examples/chat_client.py) for a working client example.
 
 ### TTSNamedPipe
 
@@ -133,7 +133,7 @@ with TTSNamedPipe("tts") as ch:
     done.wait()
 ```
 
-See [`src/ex_tts_pipe/`](src/ex_tts_pipe/) for the server and an LLM→TTS pipeline client that streams tokens directly into the TTS server.
+See [`src/examples/tts_client.py`](src/examples/tts_client.py) for an LLM→TTS pipeline client that streams tokens directly into the TTS server.
 
 ### STTNamedPipe
 
@@ -158,7 +158,7 @@ with STTNamedPipe("stt") as ch:
     done.wait()
 ```
 
-See [`src/ex_stt_pipe/`](src/ex_stt_pipe/) for a working server and a minimal subscriber client.
+See [`src/examples/stt_client.py`](src/examples/stt_client.py) for a working subscriber client.
 
 ---
 
@@ -182,7 +182,7 @@ cpipe --no-wait         # fire and forget
 cpipe -v                # verbose: print sent/received messages to stderr
 ```
 
-For the Claude Code skill that teaches the assistant to use `cpipe`, see [`.claude/skills/named-pipe-tools/SKILL.md`](.claude/skills/named-pipe-tools/SKILL.md).
+For the Claude Code skill that teaches the assistant to use `cpipe`, see [`.claude/skills/cpipe/SKILL.md`](.claude/skills/cpipe/SKILL.md).
 
 ---
 

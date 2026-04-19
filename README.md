@@ -80,17 +80,17 @@ Start order matters — **server first**, then client (server creates the FIFOs)
 
 ```bash
 # LLM chat
-cpipe --serve chat                  # Terminal 1
-python src/ex_chat_pipe/client.py   # Terminal 2
+cpipe --serve chat                      # Terminal 1
+python src/examples/chat_client.py     # Terminal 2
 
 # LLM → TTS pipeline (spoken output)
-cpipe --serve chat                  # Terminal 1: LLM  (/tmp/tool-chat)
-cpipe --serve tts                   # Terminal 2: TTS  (/tmp/tool-tts)
-python src/ex_tts_pipe/client.py    # Terminal 3: pipeline client
+cpipe --serve chat                      # Terminal 1: LLM  (/tmp/tool-chat)
+cpipe --serve tts                       # Terminal 2: TTS  (/tmp/tool-tts)
+python src/examples/tts_client.py      # Terminal 3: pipeline client
 
 # Speech-to-text
-cpipe --serve stt                   # Terminal 1: STT  (/tmp/tool-stt)
-python src/ex_stt_pipe/client.py    # Terminal 2: subscriber
+cpipe --serve stt                       # Terminal 1: STT  (/tmp/tool-stt)
+python src/examples/stt_client.py      # Terminal 2: subscriber
 
 ```
 
@@ -114,6 +114,6 @@ An included skill at [`.claude/skills/cpipe/SKILL.md`](.claude/skills/cpipe/SKIL
 
 - [DOCS.md](DOCS.md) — architecture, API reference, protocol spec, and design rationale
 - [`named-pipe-tools.md`](named-pipe-tools.md) — `ToolNamedPipe` protocol specification
-- [`src/ex_chat_pipe/`](src/ex_chat_pipe/) — LLM chat example
-- [`src/ex_tts_pipe/`](src/ex_tts_pipe/) — TTS example
-- [`src/ex_stt_pipe/`](src/ex_stt_pipe/) — STT example
+- [`src/examples/chat_client.py`](src/examples/chat_client.py) — LLM chat example
+- [`src/examples/tts_client.py`](src/examples/tts_client.py) — TTS example
+- [`src/examples/stt_client.py`](src/examples/stt_client.py) — STT example
