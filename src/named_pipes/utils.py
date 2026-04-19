@@ -8,9 +8,46 @@ https://creativecommons.org/licenses/by-sa/4.0/deed.en
 """
 
 import errno
+import importlib.metadata
+import json
 import os
 import stat
 import subprocess
+
+
+def get_version() -> str:
+    """Return the installed package version.
+
+    For editable installs, appends git commit info when not on a tagged commit:
+    e.g. "0.3.0" at the tag, or "0.3.0-3-gabcdef" three commits ahead.
+    Falls back to importlib.metadata for non-editable installs or when git is unavailable.
+    """
+    try:
+        dist = importlib.metadata.Distribution.from_name("named-pipes")
+        direct_url_text = dist.read_text("direct_url.json")
+        if direct_url_text:
+            direct_url = json.loads(direct_url_text)
+            if direct_url.get("dir_info", {}).get("editable", False):
+                src_dir = direct_url.get("url", "").removeprefix("file://")
+                result = subprocess.run(
+                    ["git", "describe", "--tags", "--long"],
+                    cwd=src_dir,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                if result.returncode == 0:
+                    # Format from git: v0.3.0-3-gabcdef
+                    parts = result.stdout.strip().rsplit("-", 2)
+                    tag = parts[0].lstrip("v")
+                    n_commits = int(parts[1])
+                    commit_hash = parts[2]
+                    if n_commits == 0:
+                        return tag
+                    return f"{tag}-{n_commits}-{commit_hash}"
+    except Exception:
+        pass
+    return importlib.metadata.version("named-pipes")
 
 
 def ensure_pipe(path):

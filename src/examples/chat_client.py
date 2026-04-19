@@ -30,6 +30,8 @@ class _LLMClient(ToolClient):
     def on_message(self, msg: dict):
         result = msg.get("result", "")
 
+        print("msg:", msg)
+
         if msg.get("done") is True:
             # End-of-stream sentinel from a streaming response.
             self.reply_received.set()
@@ -52,11 +54,11 @@ def main():
         print()  # newline after streamed chunks
 
         # --- blocking ---
-        ch.reply_received.clear()
-        print(f"\nBlocking query: {BLOCKING_QUERY[0]['content']!r}")
-        ch.send_command("chat_blocking", messages=BLOCKING_QUERY)
-        ch.reply_received.wait()
-        print(f"Response: {ch.response}")
+        # ch.reply_received.clear()
+        # print(f"\nBlocking query: {BLOCKING_QUERY[0]['content']!r}")
+        # ch.send_command("chat_blocking", messages=BLOCKING_QUERY)
+        # ch.reply_received.wait()
+        # print(f"Response: {ch.response}")
 
 
 if __name__ == "__main__":

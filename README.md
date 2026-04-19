@@ -105,9 +105,10 @@ python src/examples/stt_client.py      # Terminal 2: subscriber
 ```bash
 cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
 
-cpipe --list    # discover running ToolServer instances (tool-* pipes)
-cpipe --pid     # same, plus PIDs that have each pipe open
-cpipe --clear   # delete orphaned tool pipes
+cpipe --version  # show installed version
+cpipe --list     # discover running ToolServer instances (tool-* pipes)
+cpipe --pid      # same, plus PIDs that have each pipe open
+cpipe --clear    # delete orphaned tool pipes
 ```
 
 See [DOCS.md](DOCS.md) for all options and the full protocol reference.

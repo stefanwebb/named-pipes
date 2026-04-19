@@ -15,7 +15,7 @@ import sys
 import threading
 
 from named_pipes.text_named_pipe import Role, TextNamedPipe
-from named_pipes.utils import scan_pipes
+from named_pipes.utils import get_version, scan_pipes
 
 
 def _filter_tool_pipes(result: dict) -> dict:
@@ -220,6 +220,11 @@ Examples:
   cpipe chat greet -d Alice                    send data with a command
   cpipe chat chat -j '{"messages":[...]}'      merge extra JSON fields
 """,
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {get_version()}",
     )
     parser.add_argument(
         "pipe",

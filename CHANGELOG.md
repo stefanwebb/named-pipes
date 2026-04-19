@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-04-19
+
+### New features
+
+- **`cpipe --version`** — prints the installed package version; on editable installs, appends git commit info when not on a tagged commit (e.g. `0.3.0-3-gabcdef`)
+- **`get_version()`** — new public helper in `named_pipes.utils` (and re-exported from `named_pipes`) that implements the version-resolution logic above
+
 ## 0.3.0 — 2026-04-17
 
 ### New features

@@ -12,7 +12,7 @@ from named_pipes.text_named_pipe import TextNamedPipe
 from named_pipes.text_named_pipe import Role
 from named_pipes.tool_client import ToolClient
 from named_pipes.tool_server import ToolServer
-from named_pipes.utils import get_pids_for_pipe
+from named_pipes.utils import get_pids_for_pipe, get_version
 
 __all__ = [
     "DataNamedPipe",
@@ -21,4 +21,5 @@ __all__ = [
     "ToolServer",
     "Role",
     "get_pids_for_pipe",
+    "get_version",
 ]
