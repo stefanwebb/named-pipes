@@ -17,7 +17,7 @@ from named_pipes import text_named_pipe
 mock_vllm = MagicMock()
 sys.modules.setdefault("vllm", mock_vllm)
 
-from named_pipes.chat import Backend, ChatConfig, ChatNamedPipe  # noqa: E402
+from named_pipes.chat import Backend, ChatConfig, ChatServer  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -49,11 +49,11 @@ def make_chat_pipe(
         patch.object(text_named_pipe.os, "open", return_value=3),
         patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
         patch(
-            "named_pipes.tool_named_pipe.scan_pipes",
+            "named_pipes.tool_server.scan_pipes",
             return_value={"connected": [], "orphaned": []},
         ),
     ):
-        pipe = ChatNamedPipe(config)
+        pipe = ChatServer(config)
     return pipe
 
 

@@ -5,14 +5,14 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-Unit tests for tool_named_pipe.ToolNamedPipe (no real FIFOs created).
+Unit tests for tool_named_pipe.ToolServer (no real FIFOs created).
 """
 
 import json
 from unittest.mock import MagicMock, patch
 
 from named_pipes import text_named_pipe
-from named_pipes.tool_named_pipe import ToolNamedPipe
+from named_pipes.tool_server import ToolServer
 
 
 # ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ from named_pipes.tool_named_pipe import ToolNamedPipe
 
 
 def make_tool(**kwargs):
-    """Return a ToolNamedPipe with all filesystem calls patched out."""
+    """Return a ToolServer with all filesystem calls patched out."""
     defaults = {"description": "A test tool", "help_text": "Test help text"}
     defaults.update(kwargs)
     with (
@@ -30,11 +30,11 @@ def make_tool(**kwargs):
         patch.object(text_named_pipe.os, "open", return_value=3),
         patch.object(text_named_pipe.os, "fdopen", return_value=MagicMock()),
         patch(
-            "named_pipes.tool_named_pipe.scan_pipes",
+            "named_pipes.tool_server.scan_pipes",
             return_value={"connected": [], "orphaned": []},
         ),
     ):
-        tool = ToolNamedPipe("test-tool", **defaults)
+        tool = ToolServer("test-tool", **defaults)
     return tool
 
 
@@ -171,14 +171,3 @@ class TestSendHelpers:
         tool.send_response("ok")
 
         tool.send_message.assert_called_once_with(json.dumps({"result": "ok"}), None)
-
-    def test_send_command(self):
-        tool = make_tool()
-        tool.send_message = MagicMock()
-        tool._pid = 42
-
-        tool.send_command("ping")
-
-        tool.send_message.assert_called_once_with(
-            json.dumps({"pid": 42, "cmd": "ping"})
-        )

@@ -1,4 +1,4 @@
-"""Unit tests for STTNamedPipe.
+"""Unit tests for STTServer.
 
 stream_transcribe is stubbed so tests do not require a mic or model. We verify
 that the three broadcast callbacks produce the correct JSON messages and that
@@ -13,15 +13,15 @@ import pytest
 
 pytest.importorskip("mlx")
 
-import named_pipes.stt.named_pipe as stt_mod
-from named_pipes.stt import STTConfig, STTNamedPipe
+import named_pipes.stt.server as stt_mod
+from named_pipes.stt import STTConfig, STTServer
 from named_pipes.text_named_pipe import Role, TextNamedPipe
 
 
 class _StubStreamTranscribe:
     """Stand-in for voxtral.stream.stream_transcribe.
 
-    Captures the callbacks passed by STTNamedPipe and blocks until
+    Captures the callbacks passed by STTServer and blocks until
     stop_event is set. Tests invoke the captured callbacks directly.
     """
 
@@ -81,7 +81,7 @@ def _collect_messages(path: str, count: int, timeout: float = 2.0) -> list[dict]
 
 
 def test_construct_starts_worker_with_callbacks(stub):
-    pipe = STTNamedPipe(STTConfig(name="stt-test"))
+    pipe = STTServer(STTConfig(name="stt-test"))
     try:
         assert stub.entered.wait(timeout=2.0), "worker thread never started"
         assert callable(stub.on_token)
@@ -93,7 +93,7 @@ def test_construct_starts_worker_with_callbacks(stub):
 
 
 def test_on_token_broadcasts_result_json(stub):
-    with STTNamedPipe(STTConfig(name="stt-test")) as pipe:
+    with STTServer(STTConfig(name="stt-test")) as pipe:
         pipe.listen()
         assert stub.entered.wait(timeout=2.0)
 
@@ -114,7 +114,7 @@ def test_on_token_broadcasts_result_json(stub):
 
 
 def test_on_speaking_events_broadcast_speech_start_end(stub):
-    with STTNamedPipe(STTConfig(name="stt-test")) as pipe:
+    with STTServer(STTConfig(name="stt-test")) as pipe:
         pipe.listen()
         assert stub.entered.wait(timeout=2.0)
 
@@ -142,7 +142,7 @@ def test_on_speaking_events_broadcast_speech_start_end(stub):
 
 
 def test_close_sets_stop_event_and_joins_worker(stub):
-    pipe = STTNamedPipe(STTConfig(name="stt-test"))
+    pipe = STTServer(STTConfig(name="stt-test"))
     assert stub.entered.wait(timeout=2.0)
     pipe._close()
     assert stub.stop_event.is_set()
