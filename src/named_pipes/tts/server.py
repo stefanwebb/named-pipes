@@ -39,7 +39,7 @@ from pydantic import BaseModel
 from mlx_audio.tts.utils import load_model
 
 from named_pipes.text_named_pipe import Role
-from named_pipes.tool_named_pipe import ToolServer, ToolState
+from named_pipes.tool_server import ToolServer, ToolState
 
 
 class TTSState(Enum):

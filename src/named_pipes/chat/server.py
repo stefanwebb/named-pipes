@@ -27,7 +27,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from named_pipes.tool_named_pipe import ToolServer, ToolState, Role
+from named_pipes.tool_server import ToolServer, ToolState, Role
 
 
 class Backend(Enum):
