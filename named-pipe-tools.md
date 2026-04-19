@@ -33,7 +33,7 @@ Each tool exposes two named pipes:
 
 1. Client creates its downstream pipe at `/tmp/tool-{name}-{pid}`.
 2. Client sends a `subscribe` message to the upstream pipe.
-3. Tool opens the downstream pipe and confirms with `{ "result": "subscribed" }` sent **only to the subscribing client**.
+3. Tool opens the downstream pipe and responds with a `subscribed` event sent **only to the subscribing client**.
 4. Subsequent responses are routed to the **sender's** downstream pipe only, not broadcast to all subscribers.
 
 ---
@@ -42,101 +42,117 @@ Each tool exposes two named pipes:
 
 All messages are **JSON objects**, one per write.
 
-### Rule
+### Message Shapes
 
-For every message received **except `unsubscribe`**, the tool must write a response to the **sender's** downstream pipe only (identified by the `pid` field). The sole exception is the `stop` response: the tool broadcasts `{ "result": "stopping" }` to **all** subscribed clients before shutting down.
+**Client → Server (commands)**
+```json
+{ "pid": 1234, "cmd": "<command name>", "<key>": "<value>", "...": "..." }
+```
+The `pid` field identifies the calling client. Additional key-value pairs are command-specific.
+
+**Server → Client (events)**
+```json
+{ "event": "<event name>", "<key>": "<value>", "...": "..." }
+```
+Additional key-value pairs are event-specific.
+
+### Routing Rule
+
+For every command received **except `unsubscribe`**, the tool must send a response event to the **sender's** downstream pipe only (identified by the `pid` field). The sole exception is `state_changed`: the tool broadcasts that event to **all** subscribed clients whenever the tool's state changes.
 
 ### Required Commands
 
-Every tool must handle these commands. The `pid` field identifies the calling client.
+Every tool must handle these commands.
 
 #### `subscribe`
 ```json
-// Request
+// Command
 { "pid": 1234, "cmd": "subscribe" }
 
-// Response (to subscribing client only)
-{ "result": "subscribed" }
+// Event (to subscribing client only)
+{ "event": "subscribed" }
 ```
 Opens the client's downstream pipe.
 
 #### `unsubscribe`
 ```json
-// Request
+// Command
 { "pid": 1234, "cmd": "unsubscribe" }
 
-// No response (downstream pipe is now closed)
+// No event (downstream pipe is now closed)
 ```
 Closes the client's downstream pipe.
 
 #### `ping`
 ```json
-// Request
+// Command
 { "pid": 1234, "cmd": "ping" }
 
-// Response (to sender only)
-{ "result": "pong" }
+// Event (to sender only)
+{ "event": "pong" }
 ```
 Health check. Confirms the tool is alive and processing messages.
 
-#### `status`
+#### `get_state`
 ```json
-// Request
-{ "pid": 1234, "cmd": "status" }
+// Command
+{ "pid": 1234, "cmd": "get_state" }
 
-// Response (to sender only)
-{ "result": "<state>" }
+// Event (to sender only)
+{ "event": "state", "state": "<value>" }
 ```
-Returns the tool's current state as a string (e.g. `"running"`). Subclasses may define additional states beyond the base set.
+Returns the tool's current state (e.g. `"running"`). Subclasses may define additional states beyond the base set.
 
-#### `description`
+#### `get_description`
 ```json
-// Request
-{ "pid": 1234, "cmd": "description" }
+// Command
+{ "pid": 1234, "cmd": "get_description" }
 
-// Response (to sender only)
-{ "result": "Natural language description of when to use this tool" }
+// Event (to sender only)
+{ "event": "description", "description": "Natural language description of when to use this tool" }
 ```
 
-#### `help`
+#### `get_help`
 ```json
-// Request
-{ "pid": 1234, "cmd": "help" }
+// Command
+{ "pid": 1234, "cmd": "get_help" }
 
-// Response (to sender only)
-{ "result": "<content of SKILL.md>" }
+// Event (to sender only)
+{ "event": "help", "help": "<content of SKILL.md>" }
 ```
+
+#### `get_config`
+```json
+// Command
+{ "pid": 1234, "cmd": "get_config" }
+
+// Event (to sender only)
+{ "event": "config", "<key>": "<value>", "...": "..." }
+```
+Returns the tool's current configuration as key-value pairs.
 
 #### `stop`
 ```json
-// Request
+// Command
 { "pid": 1234, "cmd": "stop" }
 
-// Response (broadcast to ALL subscribers, then tool shuts down)
-{ "result": "stopping" }
-
-// Response (if rejected, to sender only)
-{ "result": "rejected" }
+// No direct response — tool changes state, which broadcasts state_changed to all subscribers
 ```
-If the tool honors the request, it broadcasts `{ "result": "stopping" }` to **all** subscribed clients before shutting down.
-
-### Custom Commands
-
-Tools may define additional commands. The only constraint is that all messages must be valid JSON, and responses must be sent only to the requesting client (via its `pid`).
+The tool transitions to the `stopping` state, which triggers a `state_changed` broadcast to all subscribed clients, then shuts down.
 
 ---
 
 ## Tool State
 
-Every tool tracks a current state and broadcasts it to all subscribers whenever it changes.
+Every tool tracks a current state and broadcasts a `state_changed` event to all subscribers whenever it changes.
 
-### `state_changed` broadcast
+### `state_changed` event
 
 ```json
 { "event": "state_changed", "state": "<value>" }
 ```
 
-Broadcast to **all** subscribers whenever `set_state` is called. Clients can use this to track the tool's lifecycle without polling `status`.
+Broadcast to **all** subscribers whenever the tool's state changes. Clients can use this to track the tool's lifecycle without polling `get_state`.
 
 ### Base states
 
@@ -149,7 +165,7 @@ All tools expose at minimum:
 
 ### Extended states
 
-Subclasses may define additional states. These are returned by the `status` command and included in `state_changed` broadcasts.
+Subclasses may define additional states. These are returned by `get_state` and included in `state_changed` broadcasts.
 
 | Tool | Additional states | Meaning |
 |------|-------------------|---------|
@@ -165,6 +181,16 @@ Subclasses may define additional states. These are returned by the `status` comm
 | | `idle` | Model loaded; sentence queue empty |
 | | `synthesizing` | Generating audio for a sentence |
 | | `error` | Unrecoverable error during load |
+
+---
+
+## Custom Commands and Events
+
+Tools may define additional commands and events. The only constraints are:
+
+- All commands must match the shape `{ "pid": <int>, "cmd": "<name>", ... }`.
+- All events must match the shape `{ "event": "<name>", ... }`.
+- Responses must be sent only to the requesting client (via its `pid`), except for broadcast events like `state_changed`.
 
 ---
 
