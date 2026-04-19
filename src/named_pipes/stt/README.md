@@ -19,7 +19,7 @@ STT server listening on /tmp/tool-stt ...
 
 ## Commands
 
-### Built-in (all ToolNamedPipe servers support these)
+### Built-in (all ToolServer instances support these)
 
 | Command | Description |
 |---|---|
@@ -78,4 +78,4 @@ cpipe stt subscribe --no-wait
 cpipe stt stop
 ```
 
-> **Note:** `cpipe` is designed for one-shot command/response use. For continuous transcription in production code, subscribe directly using `STTNamedPipe` or `TextNamedPipe` in a Python client (see `src/examples/stt_client.py`).
+> **Note:** `cpipe` is designed for one-shot command/response use. For continuous transcription in production code, subscribe directly using `STTServer` or `TextNamedPipe` in a Python client (see `src/examples/stt_client.py`).

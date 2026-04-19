@@ -5,7 +5,7 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-ToolNamedPipe — implements the Named Pipe Tools protocol.
+ToolServer — implements the Named Pipe Tools protocol (server side).
 
 See named-pipe-tools.md for the full specification.
 """
@@ -25,18 +25,13 @@ class ToolState(Enum):
     STOPPING = "stopping"
 
 
-class ToolNamedPipe(TextNamedPipe):
-    """A named-pipe tool that follows the Named Pipe Tools protocol.
+class ToolServer(TextNamedPipe):
+    """Named-pipe server that follows the Named Pipe Tools protocol.
 
-    Server (tool) side:
-        Listens on ``/tmp/tool-{name}`` for JSON commands from clients.
-        Automatically handles ``subscribe``, ``unsubscribe``, ``description``,
-        ``help``, and ``stop``.  Custom commands are registered with the
-        ``@tool.handler("CMD")`` decorator.
-
-    Client side:
-        Creates its downstream pipe at ``/tmp/tool-{name}-{pid}`` and provides
-        ``send_command`` / ``send_response`` helpers.
+    Listens on ``/tmp/tool-{name}`` for JSON commands from clients.
+    Automatically handles ``subscribe``, ``unsubscribe``, ``description``,
+    ``help``, and ``stop``.  Custom commands are registered with the
+    ``@server.handler("CMD")`` decorator.
     """
 
     def __init__(

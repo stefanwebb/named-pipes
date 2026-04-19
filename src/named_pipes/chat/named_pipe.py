@@ -5,7 +5,7 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-ChatNamedPipe — ToolNamedPipe subclass that serves LLM chat inference.
+ChatServer — ToolServer subclass that serves LLM chat inference.
 
 Commands
 --------
@@ -27,7 +27,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from named_pipes.tool_named_pipe import ToolNamedPipe, ToolState, Role
+from named_pipes.tool_named_pipe import ToolServer, ToolState, Role
 
 
 class Backend(Enum):
@@ -54,8 +54,8 @@ class ChatConfig(BaseModel):
     verbose: bool = False
 
 
-class ChatNamedPipe(ToolNamedPipe):
-    """ToolNamedPipe subclass that serves LLM chat inference.
+class ChatServer(ToolServer):
+    """ToolServer subclass that serves LLM chat inference.
 
     Supports two backends selectable via the ``backend`` parameter:
 

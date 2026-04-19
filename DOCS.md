@@ -10,10 +10,10 @@ Full architecture, API reference, protocol details, and design rationale for the
 - [Architecture](#architecture)
 - [API reference](#api-reference)
   - [TextNamedPipe and DataNamedPipe](#textnamedpipe-and-datanamedpipe)
-  - [ToolNamedPipe](#toolnamedpipe)
-  - [ChatNamedPipe](#chatnamedpipe)
-  - [TTSNamedPipe](#ttsnamedpipe)
-  - [STTNamedPipe](#sttnamedpipe)
+  - [ToolServer](#toolserver)
+  - [ChatServer](#chatserver)
+  - [TTSServer](#ttsserver)
+  - [STTServer](#sttserver)
 - [cpipe CLI reference](#cpipe-cli-reference)
 - [Installation details](#installation-details)
 
@@ -41,9 +41,9 @@ The library builds a hierarchy of abstractions over named pipes, from low-level 
 ```
 TextNamedPipe (ABC)   DataNamedPipe (ABC)
        ↓
-ToolNamedPipe
+ToolServer
     ↓       ↓       ↓
-ChatNamedPipe  TTSNamedPipe  STTNamedPipe
+ChatServer  TTSServer  STTServer
 ```
 
 ### Pipe layout
@@ -75,15 +75,15 @@ Each client subscribes with its PID, and the server creates a dedicated downstre
 
 **`DataNamedPipe`** provides the same multiplexing model for binary data, using a 4-byte big-endian length prefix to frame each payload. Subclasses implement `data_handler_fn(data: bytes)`.
 
-### ToolNamedPipe
+### ToolServer
 
-`ToolNamedPipe` extends `TextNamedPipe` with a standardized protocol for building **agentic tools** — persistent server processes that expose capabilities to one or more clients (e.g. an agent). It defines a set of built-in commands (`subscribe`, `unsubscribe`, `description`, `help`, `stop`) and allows tools to register custom commands via a decorator.
+`ToolServer` extends `TextNamedPipe` with a standardized protocol for building **agentic tools** — persistent server processes that expose capabilities to one or more clients (e.g. an agent). It defines a set of built-in commands (`subscribe`, `unsubscribe`, `description`, `help`, `stop`) and allows tools to register custom commands via a decorator.
 
 The full protocol specification is in [`named-pipe-tools.md`](named-pipe-tools.md).
 
-### ChatNamedPipe
+### ChatServer
 
-`ChatNamedPipe` inherits from `ToolNamedPipe` and implements an LLM inference tool. It registers two commands:
+`ChatServer` inherits from `ToolServer` and implements an LLM inference tool. It registers two commands:
 
 - **`chat`** — streaming inference; sends token chunks as they are generated, followed by a `done: true` sentinel
 - **`chat_blocking`** — non-streaming inference; returns the full reply in one message
@@ -94,15 +94,15 @@ Two backends are supported:
 - **`Backend.VLLM`** — vLLM for higher-throughput serving (Linux)
 
 ```python
-from named_pipes.chat_named_pipe import Backend, ChatNamedPipe
+from named_pipes.chat import Backend, ChatServer
 
-with ChatNamedPipe(
-    "chat",
-    "Qwen/Qwen3.5-0.8B",
-    backend=Backend.TRANSFORMERS,
-    description="Simple LLM chat server powered by Qwen3.5-0.8B.",
-    max_new_tokens=256,
-    do_sample=False,
+with ChatServer(
+    ChatConfig(
+        model="Qwen/Qwen3.5-0.8B",
+        backend=Backend.TRANSFORMERS,
+        description="Simple LLM chat server powered by Qwen3.5-0.8B.",
+        backend_kwargs={"max_new_tokens": 256, "do_sample": False},
+    )
 ) as ch:
     done = ch.listen()
     print("LLM server listening on /tmp/tool-chat ...")
@@ -111,13 +111,13 @@ with ChatNamedPipe(
 
 See [`src/examples/chat_client.py`](src/examples/chat_client.py) for a working client example.
 
-### TTSNamedPipe
+### TTSServer
 
-`TTSNamedPipe` inherits from `ToolNamedPipe` and implements a real-time text-to-speech tool. It accumulates incoming text tokens, splits on sentence boundaries (`. ! ?`), and synthesises each sentence as audio played through the system speakers. Synthesis and playback run on background threads so the pipe stays responsive during generation.
+`TTSServer` inherits from `ToolServer` and implements a real-time text-to-speech tool. It accumulates incoming text tokens, splits on sentence boundaries (`. ! ?`), and synthesises each sentence as audio played through the system speakers. Synthesis and playback run on background threads so the pipe stays responsive during generation.
 
 Backend: [mlx-audio](https://github.com/Blaizzy/mlx-audio) with the Kokoro-82M model (macOS / Apple Silicon).
 
-Commands (in addition to `ToolNamedPipe` builtins):
+Commands (in addition to `ToolServer` builtins):
 
 | Command | Data | Description |
 |---------|------|-------------|
@@ -125,9 +125,9 @@ Commands (in addition to `ToolNamedPipe` builtins):
 | `flush` | — | Force-synthesise whatever remains in the buffer (call at end of generation) |
 
 ```python
-from named_pipes.tts_named_pipe import TTSNamedPipe
+from named_pipes.tts import TTSServer
 
-with TTSNamedPipe("tts") as ch:
+with TTSServer() as ch:
     done = ch.listen()
     print("TTS server listening on /tmp/tool-tts ...")
     done.wait()
@@ -135,9 +135,9 @@ with TTSNamedPipe("tts") as ch:
 
 See [`src/examples/tts_client.py`](src/examples/tts_client.py) for an LLM→TTS pipeline client that streams tokens directly into the TTS server.
 
-### STTNamedPipe
+### STTServer
 
-`STTNamedPipe` inherits from `ToolNamedPipe` and implements a real-time speech-to-text tool. On construction it starts a background thread that captures the default microphone and runs streaming decode via a vendored [Voxtral](https://mistral.ai/news/voxtral) implementation. Transcribed tokens and VAD lifecycle events are broadcast to all subscribers as JSON messages.
+`STTServer` inherits from `ToolServer` and implements a real-time speech-to-text tool. On construction it starts a background thread that captures the default microphone and runs streaming decode via a vendored [Voxtral](https://mistral.ai/news/voxtral) implementation. Transcribed tokens and VAD lifecycle events are broadcast to all subscribers as JSON messages.
 
 Backend: vendored Voxtral (`mlx-community/Voxtral-Mini-4B-Realtime-6bit`, macOS / Apple Silicon).
 
@@ -150,9 +150,9 @@ Broadcast messages (no custom commands — this is a producer-only server):
 | `{"event": "speech_end"}` | VAD detected end of speech |
 
 ```python
-from named_pipes.stt import STTNamedPipe
+from named_pipes.stt import STTServer
 
-with STTNamedPipe("stt") as ch:
+with STTServer() as ch:
     done = ch.listen()
     print("STT server listening on /tmp/tool-stt ...")
     done.wait()
@@ -164,13 +164,13 @@ See [`src/examples/stt_client.py`](src/examples/stt_client.py) for a working sub
 
 ## cpipe CLI reference
 
-`cpipe` is installed as a console script and lets you send commands to any `ToolNamedPipe` server from the terminal, like `curl` for pipes. Discovery commands (`--list`, `--pid`, `--clear`) only show pipes following the `tool-*` naming convention.
+`cpipe` is installed as a console script and lets you send commands to any `ToolServer` from the terminal, like `curl` for pipes. Discovery commands (`--list`, `--pid`, `--clear`) only show pipes following the `tool-*` naming convention.
 
 ```bash
 # Send a command (subscribe → send → wait for response → unsubscribe)
 cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
 
-# Discover running ToolNamedPipe servers
+# Discover running ToolServer instances
 cpipe --list            # tool pipes (tool-*) connected / orphaned under /tmp
 cpipe --pid             # same, plus the PIDs that have each pipe open
 cpipe --clear           # delete orphaned tool pipes (no process has open)

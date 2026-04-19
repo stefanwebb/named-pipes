@@ -66,9 +66,9 @@ cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello!
 **3. Or write a client in Python:**
 
 ```python
-from named_pipes.tool_named_pipe import ToolNamedPipe, Role
+from named_pipes.tool_named_pipe import ToolServer, Role
 
-with ToolNamedPipe("tool-chat", role=Role.CLIENT) as ch:
+with ToolServer("tool-chat", role=Role.CLIENT) as ch:
     ch.send_message("chat", '{"messages": [{"role":"user","content":"Hello!"}]}')
     for msg in ch.receive_stream():
         print(msg)
@@ -99,7 +99,7 @@ python src/examples/stt_client.py      # Terminal 2: subscriber
 ```bash
 cpipe /tmp/tool-chat chat --data '{"messages": [{"role":"user","content":"Hello"}]}'
 
-cpipe --list    # discover running ToolNamedPipe servers (tool-* pipes)
+cpipe --list    # discover running ToolServer instances (tool-* pipes)
 cpipe --pid     # same, plus PIDs that have each pipe open
 cpipe --clear   # delete orphaned tool pipes
 ```
@@ -113,7 +113,7 @@ An included skill at [`.claude/skills/cpipe/SKILL.md`](.claude/skills/cpipe/SKIL
 ## Resources
 
 - [DOCS.md](DOCS.md) — architecture, API reference, protocol spec, and design rationale
-- [`named-pipe-tools.md`](named-pipe-tools.md) — `ToolNamedPipe` protocol specification
+- [`named-pipe-tools.md`](named-pipe-tools.md) — `ToolServer` protocol specification
 - [`src/examples/chat_client.py`](src/examples/chat_client.py) — LLM chat example
 - [`src/examples/tts_client.py`](src/examples/tts_client.py) — TTS example
 - [`src/examples/stt_client.py`](src/examples/stt_client.py) — STT example

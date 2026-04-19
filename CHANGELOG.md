@@ -4,14 +4,14 @@
 
 ### New features
 
-- **`STTState` enum** — `STTNamedPipe` now tracks lifecycle state: `loading` (models loading), `listening` (waiting for speech), `transcribing` (speech detected, decoding tokens), `error`
-- **`TTSState` enum** — `TTSNamedPipe` now tracks lifecycle state: `loading` (model loading), `idle` (queue empty), `synthesizing` (generating audio for a sentence), `error`
+- **`STTState` enum** — `STTServer` now tracks lifecycle state: `loading` (models loading), `listening` (waiting for speech), `transcribing` (speech detected, decoding tokens), `error`
+- **`TTSState` enum** — `TTSServer` now tracks lifecycle state: `loading` (model loading), `idle` (queue empty), `synthesizing` (generating audio for a sentence), `error`
 - **`verbose` flag** — `ChatConfig`, `STTConfig`, and `TTSConfig` each gain a `verbose: bool = False` field; when enabled, servers print inference output and progress to stdout
 
 ### Improvements
 
-- **Handler refactor** — `ChatNamedPipe` and `ToolNamedPipe` built-in handlers moved from inline closures to named methods (`_handle_chat`, `_handle_chat_blocking`, `_register_builtin_handlers`), making them independently testable
-- **`on_ready` callback** — `stream_transcribe` now accepts an optional `on_ready` callback invoked after both the Voxtral ASR model and Silero VAD finish loading, used by `STTNamedPipe` to transition from `loading` to `listening`
+- **Handler refactor** — `ChatServer` and `ToolServer` built-in handlers moved from inline closures to named methods (`_handle_chat`, `_handle_chat_blocking`, `_register_builtin_handlers`), making them independently testable
+- **`on_ready` callback** — `stream_transcribe` now accepts an optional `on_ready` callback invoked after both the Voxtral ASR model and Silero VAD finish loading, used by `STTServer` to transition from `loading` to `listening`
 - **`state_changed` broadcasts** — all three concrete servers (`chat`, `stt`, `tts`) now broadcast `{"event": "state_changed", "state": "<value>"}` to subscribers on every state transition
 
 ### Infrastructure / Documentation
@@ -23,17 +23,17 @@
 
 ### New features
 
-- **`ping` command** — built-in health check on every `ToolNamedPipe` server; responds with `"pong"`
+- **`ping` command** — built-in health check on every `ToolServer` server; responds with `"pong"`
 - **`status` command** — built-in state query; responds with the server's current `ToolState` value (e.g. `"running"`)
-- **`ToolState` enum** — `ToolNamedPipe` now tracks its lifecycle state via a `_state` field; base state is `RUNNING`
+- **`ToolState` enum** — `ToolServer` now tracks its lifecycle state via a `_state` field; base state is `RUNNING`
 
 ### Improvements
 
 - `cpipe --list`, `--pid`, `--clear` now filter to `tool-*` pipes only, ignoring unrelated FIFOs under `/tmp`
 - `cpipe --pid` prints a progress message before the slow process scan
-- `ToolNamedPipe` loads `SKILL.md` via the concrete subclass's module file (fixes `cpipe chat help` returning wrong content when launched via `cpipe --serve`)
+- `ToolServer` loads `SKILL.md` via the concrete subclass's module file (fixes `cpipe chat help` returning wrong content when launched via `cpipe --serve`)
 - Restructured chat and TTS servers into subpackages (`named_pipes/chat/`, `named_pipes/tts/`) matching the STT layout
-- Removed `BasicPipeChannel` and legacy example scripts; `cpipe` and docs updated to reflect `ToolNamedPipe`-only scope
+- Removed `BasicPipeChannel` and legacy example scripts; `cpipe` and docs updated to reflect `ToolServer`-only scope
 
 ### Infrastructure / Documentation
 
@@ -45,7 +45,7 @@
 
 ### New features
 
-- **`STTNamedPipe`** — real-time speech-to-text server over a named pipe; captures the default microphone and streams transcribed tokens and VAD lifecycle events (`speech_start`, `speech_end`) to all subscribers
+- **`STTServer`** — real-time speech-to-text server over a named pipe; captures the default microphone and streams transcribed tokens and VAD lifecycle events (`speech_start`, `speech_end`) to all subscribers
 - **Voxtral backend** — Voxtral Mini 4B Realtime (6-bit) vendored under `named_pipes/stt/voxtral/`; switched from Whisper to Voxtral Realtime with progressive token streaming
 - **Silero VAD** — replaced RMS silence detection with Silero VAD for more accurate speech onset/end detection
 - **STT callbacks** — `on_token`, `on_speech_start`, `on_speech_end` callbacks and a `stop_event` for clean shutdown of the transcription thread
@@ -70,10 +70,10 @@
 ### New features
 
 - **`cpipe` CLI** — command-line tool for discovering, inspecting, and sending commands to named-pipe servers (`--list`, `--pid`, `--clear` flags)
-- **`TTSNamedPipe`** — real-time text-to-speech server over a named pipe, supporting mlx-audio (macOS) and vllm-omni (Linux)
-- **`ChatNamedPipe`** — LLM chat server with streaming inference via `TextIteratorStreamer`; LLM tokens stream directly to a TTS server in real time
-- **`ToolNamedPipe`** — named-pipe server variant for tool-calling workflows
-- **Sender-targeted routing** — PID is threaded through all pipe classes (`TextNamedPipe`, `DataNamedPipe`, `BasicPipeChannel`, `ChatNamedPipe`) so handlers can route replies back to a specific client
+- **`TTSServer`** — real-time text-to-speech server over a named pipe, supporting mlx-audio (macOS) and vllm-omni (Linux)
+- **`ChatServer`** — LLM chat server with streaming inference via `TextIteratorStreamer`; LLM tokens stream directly to a TTS server in real time
+- **`ToolServer`** — named-pipe server variant for tool-calling workflows
+- **Sender-targeted routing** — PID is threaded through all pipe classes (`TextNamedPipe`, `DataNamedPipe`, `BasicPipeChannel`, `ChatServer`) so handlers can route replies back to a specific client
 - **Pipe scanning** — fast `O_WRONLY` probe + `lsof`-based PID lookup to detect and clear orphaned pipes under `/tmp`
 - **Streaming timeout fix** — response timeout is suspended once streaming begins so long LLM outputs don't time out mid-stream
 

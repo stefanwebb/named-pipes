@@ -19,7 +19,7 @@ CHAT server listening on /tmp/tool-chat ...
 
 ## Commands
 
-### Built-in (all ToolNamedPipe servers support these)
+### Built-in (all ToolServer instances support these)
 
 | Command | Description |
 |---|---|

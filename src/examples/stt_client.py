@@ -19,7 +19,7 @@ from named_pipes.text_named_pipe import Role, TextNamedPipe
 
 
 class _STTClient(TextNamedPipe):
-    """Minimal subscriber for the STTNamedPipe / ToolNamedPipe protocol."""
+    """Minimal subscriber for the STTServer / ToolServer protocol."""
 
     def __init__(self):
         super().__init__("/tmp/tool-stt", Role.CLIENT)

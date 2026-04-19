@@ -28,7 +28,7 @@ QUERY = [
 
 
 class _LLMClient(TextNamedPipe):
-    """Minimal streaming client for the ToolNamedPipe / ChatNamedPipe protocol."""
+    """Minimal streaming client for the ToolServer / ChatServer protocol."""
 
     def __init__(self, on_chunk, on_done):
         super().__init__("/tmp/tool-chat", Role.CLIENT)
@@ -51,7 +51,7 @@ class _LLMClient(TextNamedPipe):
 
 
 class _TTSClient(TextNamedPipe):
-    """Minimal client for the TTSNamedPipe / ToolNamedPipe protocol."""
+    """Minimal client for the TTSServer / ToolServer protocol."""
 
     def __init__(self):
         super().__init__("/tmp/tool-tts", Role.CLIENT)

@@ -4,7 +4,7 @@ description: Use cpipe to discover, inspect, and send commands to named-pipe too
 allowed-tools: [Bash]
 ---
 
-Use `cpipe` to interact with `ToolNamedPipe` servers (servers following the `tool-*` pipe naming convention). Always activate the `named-pipes` conda environment first.
+Use `cpipe` to interact with `ToolServer` instances (servers following the `tool-*` pipe naming convention). Always activate the `named-pipes` conda environment first.
 
 ```bash
 conda activate named-pipes

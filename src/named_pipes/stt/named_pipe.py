@@ -5,7 +5,7 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-STTNamedPipe — a named-pipe tool that streams speech-to-text transcription
+STTServer — a named-pipe server that streams speech-to-text transcription
 from the default microphone to all subscribers.
 
 On construction the class starts a background thread running the vendored
@@ -23,7 +23,7 @@ from pydantic import BaseModel
 
 from named_pipes.stt.voxtral.stream import stream_transcribe
 from named_pipes.text_named_pipe import Role
-from named_pipes.tool_named_pipe import ToolNamedPipe, ToolState
+from named_pipes.tool_named_pipe import ToolServer, ToolState
 
 
 class STTState(Enum):
@@ -44,7 +44,7 @@ class STTConfig(BaseModel):
     verbose: bool = False
 
 
-class STTNamedPipe(ToolNamedPipe):
+class STTServer(ToolServer):
     """Named-pipe STT server.
 
     Starts the microphone and the Voxtral streaming decode loop in a daemon

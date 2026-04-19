@@ -1,5 +1,5 @@
 """
-cpipe — send a command to a ToolNamedPipe server, like curl for pipes.
+cpipe — send a command to a ToolServer, like curl for pipes.
 
 © 2025–2026, Stefan Webb. Some Rights Reserved.
 
@@ -173,17 +173,17 @@ _SERVE_CHOICES = ("chat", "tts", "stt")
 def _serve(kind: str) -> None:
     """Launch a server with default config and block until interrupted."""
     if kind == "chat":
-        from named_pipes.chat import ChatNamedPipe
+        from named_pipes.chat import ChatServer
 
-        cls, pipe_path = ChatNamedPipe, "/tmp/tool-chat"
+        cls, pipe_path = ChatServer, "/tmp/tool-chat"
     elif kind == "tts":
-        from named_pipes.tts import TTSNamedPipe
+        from named_pipes.tts import TTSServer
 
-        cls, pipe_path = TTSNamedPipe, "/tmp/tool-tts"
+        cls, pipe_path = TTSServer, "/tmp/tool-tts"
     elif kind == "stt":
-        from named_pipes.stt import STTNamedPipe
+        from named_pipes.stt import STTServer
 
-        cls, pipe_path = STTNamedPipe, "/tmp/tool-stt"
+        cls, pipe_path = STTServer, "/tmp/tool-stt"
     else:
         print(f"cpipe: unknown server type {kind!r}", file=sys.stderr)
         sys.exit(1)
@@ -200,7 +200,7 @@ def _serve(kind: str) -> None:
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="cpipe",
-        description="Send a command to a ToolNamedPipe server (like curl for pipes).",
+        description="Send a command to a ToolServer (like curl for pipes).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""\
 Examples:

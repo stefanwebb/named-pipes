@@ -5,7 +5,7 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-TTSNamedPipe — a named-pipe tool that streams TTS audio in real time.
+TTSServer — a named-pipe server that streams TTS audio in real time.
 
 Incoming text tokens are buffered until a sentence boundary is detected,
 then the sentence is synthesised and queued for playback.
@@ -15,7 +15,7 @@ Pipeline:
                   → [TTS worker thread] → audio_queue
                   → [audio callback]    → speakers
 
-Supported commands (in addition to ToolNamedPipe builtins):
+Supported commands (in addition to ToolServer builtins):
     {"pid": <int>, "cmd": "text", "data": "<tokens>"}
         Append tokens to the text buffer.  When a sentence boundary
         (. ! ? followed by whitespace) is detected the sentence is
@@ -39,7 +39,7 @@ from pydantic import BaseModel
 from mlx_audio.tts.utils import load_model
 
 from named_pipes.text_named_pipe import Role
-from named_pipes.tool_named_pipe import ToolNamedPipe, ToolState
+from named_pipes.tool_named_pipe import ToolServer, ToolState
 
 
 class TTSState(Enum):
@@ -75,11 +75,11 @@ _BOUNDARY = re.compile(r"(?<=[.!?])\s+")
 
 
 # ---------------------------------------------------------------------------
-# TTSNamedPipe
+# TTSServer
 # ---------------------------------------------------------------------------
 
 
-class TTSNamedPipe(ToolNamedPipe):
+class TTSServer(ToolServer):
     """Named-pipe TTS server.
 
     Listens for ``text`` and ``flush`` commands, accumulates tokens into

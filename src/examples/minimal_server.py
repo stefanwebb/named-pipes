@@ -10,11 +10,11 @@ microphone, and broadcasts transcribed tokens plus VAD speech-start /
 speech-end events to all subscribers of /tmp/tool-stt.
 """
 
-from named_pipes.stt import STTNamedPipe
+from named_pipes.stt import STTServer
 
 
 def main():
-    with STTNamedPipe() as ch:
+    with STTServer() as ch:
         done = ch.listen()
         print("STT server listening on /tmp/tool-stt ...")
         done.wait()

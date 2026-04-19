@@ -21,7 +21,7 @@ BLOCKING_QUERY = [
 
 
 class _LLMClient(TextNamedPipe):
-    """Minimal client for the ToolNamedPipe / ChatNamedPipe protocol."""
+    """Minimal client for the ToolServer / ChatServer protocol."""
 
     def __init__(self):
         super().__init__("/tmp/tool-chat", Role.CLIENT)
