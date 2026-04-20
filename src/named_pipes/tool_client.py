@@ -30,12 +30,31 @@ class ToolClient(TextNamedPipe):
     Without the context manager, call ``listen()`` then ``subscribe()``
     manually, and ``unsubscribe()`` / ``_close()`` before discarding.
 
-    Override ``on_message(msg)`` to handle server responses.
+    Register event handlers with the ``on`` decorator::
+
+        @client.on("reply")
+        def _(msg):
+            print(msg.get("text"))
     """
 
     def __init__(self, name: str):
         super().__init__(f"/tmp/tool-{name}", Role.CLIENT)
         self._subscribed = threading.Event()
+        self._handlers: dict[str, callable] = {}
+
+    # --- decorator for event handlers ---
+
+    def on(self, event: str):
+        """Decorator that registers a handler for *event*.
+
+        The registered function must accept ``(msg: dict)``.
+        """
+
+        def decorator(fn):
+            self._handlers[event] = fn
+            return fn
+
+        return decorator
 
     # --- sending helpers ---
 
@@ -60,14 +79,9 @@ class ToolClient(TextNamedPipe):
         if msg.get("event") == "subscribed":
             self._subscribed.set()
             return
-        self.on_message(msg)
-
-    def on_message(self, msg: dict):
-        """Called for every server message after subscription is confirmed.
-
-        Override in subclasses to handle tool-specific responses.
-        """
-        pass
+        fn = self._handlers.get(msg.get("event", ""))
+        if fn:
+            fn(msg)
 
     # --- context manager ---
 
