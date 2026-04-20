@@ -9,7 +9,6 @@ LLM client: subscribes to the LLM server, demonstrates both streaming
 (chat) and blocking (chat_blocking) inference requests.
 """
 
-import time
 import threading
 
 from named_pipes.tool_client import ToolClient
