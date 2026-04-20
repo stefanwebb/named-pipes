@@ -8,22 +8,59 @@ A proof-of-concept for low-latency interprocess communication (IPC) via named pi
 
 ## Commands
 
-### Python server
+### Named Pipe Tools demo (ToolServer + ToolClient)
+
 ```bash
-python src/my_server_console/main.py   # Start the Python server (creates pipes, listens for messages)
+# Terminal 1 — start the Python demo server
+python src/examples/demo_server.py
+
+# Terminal 2 — run the C# ToolClient demo (auto-launches server if not running)
+cd src/MyClientConsole && dotnet run
 ```
 
-### C# client
-```bash
-dotnet build            # Build the C# client
-dotnet run              # Run the C# client (requires Python server to be running first)
-```
+**Startup order matters:** the Python server creates the upstream FIFO
+(`/tmp/tool-demo`) before the C# client opens it.  The C# `Program.cs` will
+wait up to 5 s for the pipe to appear, so launching both simultaneously works.
 
-**Startup order matters:** The Python server (`src/my_server_console/main.py`) must be started before the C# client (`dotnet run`), because Python creates the FIFO files and C# opens them.
+### Legacy PipeChannel demo
+
+```bash
+python src/my_server_console/main.py   # Start the legacy Python server
+cd src/MyClientConsole && dotnet run   # Run the legacy C# client
+```
 
 ## Architecture
 
-Four named pipes carry traffic between the processes. Paths are derived from a `pipe_name` parameter (default `/tmp/agent`):
+### Named Pipe Tools protocol (current)
+
+Each tool exposes two named pipes:
+
+| Pipe path | Direction | Format |
+|---|---|---|
+| `/tmp/tool-{name}` | client → server | Newline-delimited JSON `{"pid": ..., "cmd": "...", ...}` |
+| `/tmp/tool-{name}-{pid}` | server → client | Newline-delimited JSON `{"event": "...", ...}` |
+
+The server creates the upstream FIFO.  Each client creates its own downstream
+FIFO, which the server opens after receiving a `subscribe` command.
+
+All FIFOs are opened `O_RDWR` (using `FileAccess.ReadWrite` in C#) so open
+calls never block and the read end never sees EOF when the remote writer closes.
+
+See `named-pipe-tools.md` for the full protocol specification.
+
+#### Python side (`src/named_pipes/`)
+- `tool_server.py`: `ToolServer` base class — listens on `/tmp/tool-{name}`.  Register custom commands with `@server.handler("cmd")`.  Built-in: `subscribe`, `unsubscribe`, `ping`, `get_state`, `get_description`, `get_help`, `get_config`, `stop`.
+- `tool_client.py`: `ToolClient` base class — creates the per-PID downstream FIFO and subscribes.  Register event handlers with `@client.on("event")`.
+- `text_named_pipe.py`: shared transport layer (`TextNamedPipe`), role-based pipe management, background listener thread with `select`.
+- `utils.py`: `get_pids_for_pipe()` uses `psutil` to find which PIDs have a pipe path open.
+
+#### C# side (`src/MyClientConsole/`)
+- `ToolClient.cs`: mirrors `tool_client.py`.  Creates `/tmp/tool-{name}-{pid}` via `mkfifo` P/Invoke, opens both FIFOs `O_RDWR`, runs a background `ToolClientListener` thread.  Register handlers with `On("event", handler)`.  Call `StartListening()`, then `Subscribe()` before sending commands.
+- `Program.cs`: demo that optionally launches `src/examples/demo_server.py`, then exercises `ping`, `get_state`, `get_description`, a custom `greet` command, and `stop`.
+
+### Legacy PipeChannel protocol
+
+Four named pipes derived from a `pipe_name` parameter (default `/tmp/agent`):
 
 | Pipe path | Direction | Format |
 |---|---|---|
@@ -32,18 +69,5 @@ Four named pipes carry traffic between the processes. Paths are derived from a `
 | `<pipe_name>-data-upstream` | C# → Python | 4-byte big-endian length prefix + raw bytes |
 | `<pipe_name>-data-downstream` | Python → C# | Same |
 
-All four FIFOs are opened `O_RDWR` on the Python side so the open calls never block and the read end never sees EOF when the remote writer closes its side.
-
-### Python side (`src/named_pipes/`, `src/my_server_console/main.py`)
-- `pipe_reader.py`: `PipeChannel` class manages all four pipes as a context manager. `ch.handler("CMD")` is a decorator that registers handler functions. `ch.dispatch()` routes incoming messages to handlers.
-- `src/my_server_console/main.py`: registers handlers via `@ch.handler(...)` and runs the blocking read loop.
-- `utils.py`: `get_pids_for_pipe()` uses `psutil` to find which PIDs have a pipe path open — useful for debugging.
-
-### C# side (`PipeChannel.cs`, `Program.cs`)
-- `PipeChannel` wraps the four `FileStream`s with separate background listener threads (`MsgListener`, `DataListener`) for non-blocking receives.
-- Events `MessageReceived` and `DataReceived` fire on their respective listener threads — handlers must be thread-safe.
-- `Program.cs` drives a sequential command chain via a `Queue<Action>`, dispatching the next step from inside each `MessageReceived` handler.
-
-### Supported commands
-`PING` → `PONG`, `GREET`, `TIME`, `ECHO`, `SEND_BYTES` (sends data on the data pipe and echoes it back), `QUIT` → `BYE`
+- `PipeChannel.cs`: wraps the four `FileStream`s with `MsgListener` and `DataListener` background threads.  `MessageReceived` and `DataReceived` events fire on listener threads — handlers must be thread-safe.
 
