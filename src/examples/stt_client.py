@@ -23,13 +23,16 @@ class _STTClient(ToolClient):
     def __init__(self):
         super().__init__("stt")
 
-    def on_message(self, msg: dict):
-        event = msg.get("event")
-        if event == "token":
+        @self.on("token")
+        def _(msg):
             print(msg.get("text", ""), end="", flush=True)
-        elif event == "speech_start":
+
+        @self.on("speech_start")
+        def _(msg):
             print("\n[speech_start] ", end="", flush=True)
-        elif event == "speech_end":
+
+        @self.on("speech_end")
+        def _(msg):
             print(" [speech_end]", flush=True)
 
 
