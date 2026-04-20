@@ -23,10 +23,11 @@ CHAT server listening on /tmp/tool-chat ...
 
 | Command | Description |
 |---|---|
-| `ping` | Health check — responds with `pong` |
-| `status` | Current server state (e.g. `running`) |
-| `description` | One-line description of the server |
-| `help` | Full help text (this file) |
+| `ping` | Health check — responds with `pong` event |
+| `get_state` | Current server state (e.g. `running`) |
+| `get_description` | One-line description of the server |
+| `get_help` | Full help text (this file) |
+| `get_config` | Current server configuration |
 | `stop` | Shut the server down gracefully |
 
 ### Chat commands
@@ -39,11 +40,11 @@ Sends tokens back as they are generated.
 cpipe chat chat -j '{"messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-The server replies with one chunk per token batch, followed by a done sentinel:
+The server replies with one token event per batch, followed by a done sentinel:
 
 ```json
-{"result": "<token>", "done": false}
-{"result": "", "done": true}
+{"event": "token", "text": "<token>", "done": false}
+{"event": "token", "text": "", "done": true}
 ```
 
 #### `chat_blocking` — non-streaming inference
@@ -54,10 +55,10 @@ Waits for the full response before replying.
 cpipe chat chat_blocking -j '{"messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
-Replies with a single message:
+Replies with a single event:
 
 ```json
-{"result": "<full reply text>"}
+{"event": "reply", "text": "<full reply text>"}
 ```
 
 ## Message format
@@ -75,7 +76,7 @@ The `messages` array follows the OpenAI chat format:
 
 ## States
 
-The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `status` command returns the current state.
+The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `get_state` command returns the current state.
 
 | State | When |
 |-------|------|
@@ -93,7 +94,7 @@ The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all su
 cpipe --list
 
 # Get a one-line description
-cpipe chat description
+cpipe chat get_description
 
 # Streaming chat
 cpipe chat chat -j '{"messages": [{"role": "user", "content": "Tell me a joke"}]}'

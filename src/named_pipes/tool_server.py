@@ -29,8 +29,9 @@ class ToolServer(TextNamedPipe):
     """Named-pipe server that follows the Named Pipe Tools protocol.
 
     Listens on ``/tmp/tool-{name}`` for JSON commands from clients.
-    Automatically handles ``subscribe``, ``unsubscribe``, ``description``,
-    ``help``, and ``stop``.  Custom commands are registered with the
+    Automatically handles ``subscribe``, ``unsubscribe``, ``ping``,
+    ``get_state``, ``get_description``, ``get_help``, ``get_config``,
+    and ``stop``.  Custom commands are registered with the
     ``@server.handler("CMD")`` decorator.
     """
 
@@ -92,9 +93,16 @@ class ToolServer(TextNamedPipe):
 
     # --- sending helpers ---
 
-    def send_response(self, result: str, pid: int | None = None):
-        """Send ``{"result": ...}`` to *pid* (or broadcast if *pid* is None)."""
-        self.send_message(json.dumps({"result": result}), pid)
+    def send_event(self, event: str, pid: int | None = None, **kwargs):
+        """Send ``{"event": event, ...kwargs}`` to *pid* (or broadcast if *pid* is None)."""
+        payload = {"event": event}
+        payload.update(kwargs)
+        self.send_message(json.dumps(payload), pid)
+
+    # --- config hook for subclasses ---
+
+    def _get_config(self) -> dict:
+        return {}
 
     # --- built-in handlers ---
 
@@ -102,32 +110,35 @@ class ToolServer(TextNamedPipe):
         @self.handler("subscribe")
         def _subscribe(msg, pid):
             self.subscribe(pid)
-            self.send_response("subscribed", pid)
+            self.send_event("subscribed", pid)
 
         @self.handler("unsubscribe")
         def _unsubscribe(msg, pid):
             self.unsubscribe(pid)  # No response per protocol spec
 
-        @self.handler("description")
-        def _description(msg, pid):
-            self.send_response(self._description, pid)
+        @self.handler("get_description")
+        def _get_description(msg, pid):
+            self.send_event("description", pid, description=self._description)
 
-        @self.handler("help")
-        def _help(msg, pid):
-            self.send_response(self._help_text, pid)
+        @self.handler("get_help")
+        def _get_help(msg, pid):
+            self.send_event("help", pid, help=self._help_text)
 
         @self.handler("ping")
         def _ping(msg, pid):
-            self.send_response("pong", pid)
+            self.send_event("pong", pid)
 
-        @self.handler("status")
-        def _status(msg, pid):
-            self.send_response(self._state.value, pid)
+        @self.handler("get_state")
+        def _get_state(msg, pid):
+            self.send_event("state", pid, state=self._state.value)
+
+        @self.handler("get_config")
+        def _handle_get_config(msg, pid):
+            self.send_event("config", pid, **self._get_config())
 
         @self.handler("stop")
         def _stop(msg, pid):
             self.set_state(ToolState.STOPPING)
-            self.broadcast_message(json.dumps({"result": "stopping"}))
             self.stop()
 
     # --- protocol message handler ---
@@ -138,7 +149,7 @@ class ToolServer(TextNamedPipe):
         if fn:
             fn(msg, pid)
         else:
-            self.send_response(f"unknown command '{cmd}'", pid)
+            self.send_event("error", pid, message=f"unknown command '{cmd}'")
 
     # --- context manager ---
 

@@ -23,17 +23,18 @@ STT server listening on /tmp/tool-stt ...
 
 | Command | Description |
 |---|---|
-| `ping` | Health check — responds with `pong` |
-| `status` | Current server state (e.g. `running`) |
-| `description` | One-line description of the server |
-| `help` | Full help text |
+| `ping` | Health check — responds with `pong` event |
+| `get_state` | Current server state (e.g. `running`) |
+| `get_description` | One-line description of the server |
+| `get_help` | Full help text |
+| `get_config` | Current server configuration |
 | `stop` | Shut the server down gracefully |
 
 The STT server has no custom request commands — it is producer-only. Transcription output is broadcast to all subscribers automatically while audio is detected.
 
 ## States
 
-The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `status` command returns the current state.
+The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `get_state` command returns the current state.
 
 | State | When |
 |-------|------|
@@ -44,23 +45,23 @@ The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all su
 | `stopping` | `stop` command received; shutting down |
 | `error` | Unrecoverable error |
 
-## Broadcast messages
+## Broadcast events
 
-While subscribed, a client receives the following messages. State transitions (`state_changed`) are interleaved with transcription events:
+While subscribed, a client receives the following events. State transitions (`state_changed`) are interleaved with transcription events:
 
-| Message | When |
+| Event | When |
 |---|---|
 | `{"event": "state_changed", "state": "<value>"}` | Server state changes (see States above) |
 
 Per utterance:
 
-| Message | When |
+| Event | When |
 |---|---|
 | `{"event": "speech_start"}` | VAD detects start of speech |
-| `{"result": "<token>"}` | Per token emitted by the decoder |
+| `{"event": "token", "text": "<token>"}` | Per token emitted by the decoder |
 | `{"event": "speech_end"}` | End of speech detected; all tokens for the utterance have been sent |
 
-Tokens are sub-word pieces from the Voxtral tokenizer. To reconstruct whole words, concatenate consecutive `result` strings between a `speech_start` / `speech_end` pair.
+Tokens are sub-word pieces from the Voxtral tokenizer. To reconstruct whole words, concatenate consecutive `token` texts between a `speech_start` / `speech_end` pair.
 
 ## Examples
 
@@ -69,7 +70,7 @@ Tokens are sub-word pieces from the Voxtral tokenizer. To reconstruct whole word
 cpipe --list
 
 # Get a one-line description
-cpipe stt description
+cpipe stt get_description
 
 # Subscribe and listen — prints transcription to stdout until Ctrl+C
 cpipe stt subscribe --no-wait

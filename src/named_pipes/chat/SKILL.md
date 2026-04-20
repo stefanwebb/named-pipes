@@ -6,15 +6,16 @@ Pipe: `/tmp/tool-chat`
 
 ## Built-in commands
 
-| Command | Request | Response |
+| Command | Request | Response event |
 |---|---|---|
-| `subscribe` | `{"pid": <int>, "cmd": "subscribe"}` | `{"result": "subscribed"}` |
+| `subscribe` | `{"pid": <int>, "cmd": "subscribe"}` | `{"event": "subscribed"}` |
 | `unsubscribe` | `{"pid": <int>, "cmd": "unsubscribe"}` | *(none)* |
-| `ping` | `{"pid": <int>, "cmd": "ping"}` | `{"result": "pong"}` |
-| `status` | `{"pid": <int>, "cmd": "status"}` | `{"result": "<state>"}` e.g. `"running"` |
-| `description` | `{"pid": <int>, "cmd": "description"}` | `{"result": "<one-line description>"}` |
-| `help` | `{"pid": <int>, "cmd": "help"}` | `{"result": "<this text>"}` |
-| `stop` | `{"pid": <int>, "cmd": "stop"}` | `{"result": "stopping"}` broadcast to all subscribers, then server exits |
+| `ping` | `{"pid": <int>, "cmd": "ping"}` | `{"event": "pong"}` |
+| `get_state` | `{"pid": <int>, "cmd": "get_state"}` | `{"event": "state", "state": "<value>"}` e.g. `"running"` |
+| `get_description` | `{"pid": <int>, "cmd": "get_description"}` | `{"event": "description", "description": "<one-line description>"}` |
+| `get_help` | `{"pid": <int>, "cmd": "get_help"}` | `{"event": "help", "help": "<this text>"}` |
+| `get_config` | `{"pid": <int>, "cmd": "get_config"}` | `{"event": "config", ...}` |
+| `stop` | `{"pid": <int>, "cmd": "stop"}` | `{"event": "state_changed", "state": "stopping"}` broadcast to all subscribers, then server exits |
 
 ## Chat commands
 
@@ -24,11 +25,11 @@ Pipe: `/tmp/tool-chat`
 {"pid": 12345, "cmd": "chat", "messages": [{"role": "user", "content": "Hello"}]}
 ```
 
-The server replies with one or more chunk messages followed by a done sentinel:
+The server replies with one or more token events followed by a done sentinel:
 
 ```json
-{"result": "<token chunk>", "done": false}
-{"result": "", "done": true}
+{"event": "token", "text": "<token chunk>", "done": false}
+{"event": "token", "text": "", "done": true}
 ```
 
 ### `chat_blocking` — non-streaming inference
@@ -37,10 +38,10 @@ The server replies with one or more chunk messages followed by a done sentinel:
 {"pid": 12345, "cmd": "chat_blocking", "messages": [{"role": "user", "content": "Hello"}]}
 ```
 
-Replies with a single message when generation is complete:
+Replies with a single event when generation is complete:
 
 ```json
-{"result": "<full reply text>"}
+{"event": "reply", "text": "<full reply text>"}
 ```
 
 ## Message format

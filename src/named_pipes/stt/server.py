@@ -10,7 +10,7 @@ from the default microphone to all subscribers.
 
 On construction the class starts a background thread running the vendored
 voxtral stream_transcribe loop. Per-token output is broadcast as
-{"result": "<token>"}; VAD speech-start / speech-end events are broadcast as
+{"event": "token", "text": "<token>"}; VAD lifecycle events are broadcast as
 {"event": "speech_start"} / {"event": "speech_end"}. The tool has no custom
 commands — it is producer-only.
 """
@@ -84,7 +84,7 @@ class STTServer(ToolServer):
 
     def _on_token(self, text: str) -> None:
         with self._broadcast_lock:
-            self.broadcast_message(json.dumps({"result": text}))
+            self.broadcast_message(json.dumps({"event": "token", "text": text}))
 
     def _on_start(self) -> None:
         self.set_state(STTState.TRANSCRIBING)

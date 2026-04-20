@@ -76,7 +76,7 @@ class TestChatNamedPipe:
         pipe._infer_stream([{"role": "user", "content": "Hey"}], 1)
 
         pipe.send_message.assert_any_call(
-            json.dumps({"result": "Hi there!", "done": False}), 1
+            json.dumps({"event": "token", "text": "Hi there!", "done": False}), 1
         )
 
     def test_chat_passes_messages_to_llm(self):

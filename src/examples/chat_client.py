@@ -28,19 +28,15 @@ class _LLMClient(ToolClient):
         self.response: str | None = None
 
     def on_message(self, msg: dict):
-        result = msg.get("result", "")
+        event = msg.get("event")
 
-        print("msg:", msg)
-
-        if msg.get("done") is True:
-            # End-of-stream sentinel from a streaming response.
-            self.reply_received.set()
-        elif "done" in msg:
-            # Streaming chunk — print without newline so chunks flow together.
-            print(result, end="", flush=True)
-        else:
-            # Blocking response — store and signal.
-            self.response = result
+        if event == "token":
+            if msg.get("done") is True:
+                self.reply_received.set()
+            else:
+                print(msg.get("text", ""), end="", flush=True)
+        elif event == "reply":
+            self.response = msg.get("text", "")
             self.reply_received.set()
 
 

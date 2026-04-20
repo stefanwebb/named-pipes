@@ -25,15 +25,16 @@ TTS server listening on /tmp/tool-tts ...
 
 | Command | Description |
 |---|---|
-| `ping` | Health check — responds with `pong` |
-| `status` | Current server state (e.g. `running`) |
-| `description` | One-line description of the server |
-| `help` | Full help text |
+| `ping` | Health check — responds with `pong` event |
+| `get_state` | Current server state (e.g. `running`) |
+| `get_description` | One-line description of the server |
+| `get_help` | Full help text |
+| `get_config` | Current server configuration |
 | `stop` | Shut the server down gracefully |
 
 ## States
 
-The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `status` command returns the current state.
+The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `get_state` command returns the current state.
 
 | State | When |
 |-------|------|
@@ -77,7 +78,7 @@ Audio plays through the system default output device in real time. No audio data
 cpipe --list
 
 # Get a one-line description
-cpipe tts description
+cpipe tts get_description
 
 # Speak a single sentence
 cpipe tts text -d "The quick brown fox jumps over the lazy dog." --no-wait

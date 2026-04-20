@@ -10,15 +10,15 @@ ChatServer — ToolServer subclass that serves LLM chat inference.
 Commands
 --------
 chat
-    Streaming inference.  The server sends one ``{"result": "<chunk>",
-    "done": false}`` message per generated token (or token batch), then a
-    final ``{"result": "", "done": true}`` sentinel when generation is
-    complete.
+    Streaming inference.  The server sends one ``{"event": "token",
+    "text": "<chunk>", "done": false}`` event per generated token (or
+    token batch), then a final ``{"event": "token", "text": "", "done":
+    true}`` sentinel when generation is complete.
 
 chat_blocking
     Non-streaming inference.  The server sends a single
-    ``{"result": "<full text>"}`` message when generation is complete.
-    Equivalent to the old ``chat`` behaviour.
+    ``{"event": "reply", "text": "<full text>"}`` event when generation
+    is complete.
 """
 
 import json
@@ -72,14 +72,14 @@ class ChatServer(ToolServer):
 
         {"pid": ..., "cmd": "chat", "messages": [{"role": ..., "content": ...}, ...]}
 
-    Replies with one or more ``{"result": "<chunk>", "done": false}`` messages
-    followed by a final ``{"result": "", "done": true}`` sentinel.
+    Replies with one or more ``{"event": "token", "text": "<chunk>", "done": false}``
+    events followed by a final ``{"event": "token", "text": "", "done": true}`` sentinel.
 
     ``chat_blocking`` command (non-streaming)::
 
         {"pid": ..., "cmd": "chat_blocking", "messages": [...]}
 
-    Replies with a single ``{"result": "<full text>"}`` message.
+    Replies with a single ``{"event": "reply", "text": "<full text>"}`` event.
     """
 
     def __init__(self, config: ChatConfig = ChatConfig()):
@@ -127,7 +127,7 @@ class ChatServer(ToolServer):
         reply = self._infer(messages)
         if self._verbose:
             print(reply, flush=True)
-        self.send_response(reply, pid)
+        self.send_event("reply", pid, text=reply)
 
     # -----------------------------------------------------------------------
     # Streaming helpers
@@ -137,13 +137,15 @@ class ChatServer(ToolServer):
         """Send one streaming chunk to *pid*."""
         if self._verbose:
             print(text, end="", flush=True)
-        self.send_message(json.dumps({"result": text, "done": False}), pid)
+        self.send_message(
+            json.dumps({"event": "token", "text": text, "done": False}), pid
+        )
 
     def _send_stream_done(self, pid: int | None):
         """Send the end-of-stream sentinel to *pid*."""
         if self._verbose:
             print(flush=True)
-        self.send_message(json.dumps({"result": "", "done": True}), pid)
+        self.send_message(json.dumps({"event": "token", "text": "", "done": True}), pid)
 
     # -----------------------------------------------------------------------
     # Backend initialisation

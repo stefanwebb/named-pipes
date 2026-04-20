@@ -6,15 +6,16 @@ Pipe: `/tmp/tool-tts`
 
 ## Built-in commands
 
-| Command | Request | Response |
+| Command | Request | Response event |
 |---|---|---|
-| `subscribe` | `{"pid": <int>, "cmd": "subscribe"}` | `{"result": "subscribed"}` |
+| `subscribe` | `{"pid": <int>, "cmd": "subscribe"}` | `{"event": "subscribed"}` |
 | `unsubscribe` | `{"pid": <int>, "cmd": "unsubscribe"}` | *(none)* |
-| `ping` | `{"pid": <int>, "cmd": "ping"}` | `{"result": "pong"}` |
-| `status` | `{"pid": <int>, "cmd": "status"}` | `{"result": "<state>"}` e.g. `"running"` |
-| `description` | `{"pid": <int>, "cmd": "description"}` | `{"result": "<one-line description>"}` |
-| `help` | `{"pid": <int>, "cmd": "help"}` | `{"result": "<this text>"}` |
-| `stop` | `{"pid": <int>, "cmd": "stop"}` | `{"result": "stopping"}` broadcast to all subscribers, then server exits |
+| `ping` | `{"pid": <int>, "cmd": "ping"}` | `{"event": "pong"}` |
+| `get_state` | `{"pid": <int>, "cmd": "get_state"}` | `{"event": "state", "state": "<value>"}` e.g. `"running"` |
+| `get_description` | `{"pid": <int>, "cmd": "get_description"}` | `{"event": "description", "description": "<one-line description>"}` |
+| `get_help` | `{"pid": <int>, "cmd": "get_help"}` | `{"event": "help", "help": "<this text>"}` |
+| `get_config` | `{"pid": <int>, "cmd": "get_config"}` | `{"event": "config", ...}` |
+| `stop` | `{"pid": <int>, "cmd": "stop"}` | `{"event": "state_changed", "state": "stopping"}` broadcast to all subscribers, then server exits |
 
 ## TTS commands
 

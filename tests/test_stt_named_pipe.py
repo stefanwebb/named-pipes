@@ -69,7 +69,7 @@ def _collect_messages(path: str, count: int, timeout: float = 2.0) -> list[dict]
                 msg = client.recv_message()
             except Exception:
                 return
-            if msg.get("result") == "subscribed":
+            if msg.get("event") == "subscribed":
                 continue
             collected.append(msg)
 
@@ -110,7 +110,7 @@ def test_on_token_broadcasts_result_json(stub):
         stub.on_token("hello")
         done.wait(timeout=2.0)
 
-        assert collected == [{"result": "hello"}]
+        assert collected == [{"event": "token", "text": "hello"}]
 
 
 def test_on_speaking_events_broadcast_speech_start_end(stub):

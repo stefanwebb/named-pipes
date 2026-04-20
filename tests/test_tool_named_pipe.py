@@ -83,12 +83,12 @@ class TestProtocolCommands:
     def test_subscribe(self):
         tool = make_tool()
         tool.subscribe = MagicMock()
-        tool.send_response = MagicMock()
+        tool.send_event = MagicMock()
 
         tool.msg_handler_fn({"cmd": "subscribe", "pid": 1234}, 1234)
 
         tool.subscribe.assert_called_once_with(1234)
-        tool.send_response.assert_called_once_with("subscribed", 1234)
+        tool.send_event.assert_called_once_with("subscribed", 1234)
 
     def test_unsubscribe(self):
         tool = make_tool()
@@ -100,19 +100,21 @@ class TestProtocolCommands:
 
     def test_description(self):
         tool = make_tool(description="My cool tool")
-        tool.send_response = MagicMock()
+        tool.send_event = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "description", "pid": 1}, 1)
+        tool.msg_handler_fn({"cmd": "get_description", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("My cool tool", 1)
+        tool.send_event.assert_called_once_with(
+            "description", 1, description="My cool tool"
+        )
 
     def test_help(self):
         tool = make_tool(help_text="Use me like this")
-        tool.send_response = MagicMock()
+        tool.send_event = MagicMock()
 
-        tool.msg_handler_fn({"cmd": "help", "pid": 1}, 1)
+        tool.msg_handler_fn({"cmd": "get_help", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("Use me like this", 1)
+        tool.send_event.assert_called_once_with("help", 1, help="Use me like this")
 
     def test_stop(self):
         tool = make_tool()
@@ -121,16 +123,20 @@ class TestProtocolCommands:
 
         tool.msg_handler_fn({"cmd": "stop", "pid": 1}, 1)
 
-        tool.broadcast_message.assert_any_call(json.dumps({"result": "stopping"}))
+        tool.broadcast_message.assert_any_call(
+            json.dumps({"event": "state_changed", "state": "stopping"})
+        )
         tool.stop.assert_called_once()
 
     def test_unknown_command(self):
         tool = make_tool()
-        tool.send_response = MagicMock()
+        tool.send_event = MagicMock()
 
         tool.msg_handler_fn({"cmd": "nosuch", "pid": 1}, 1)
 
-        tool.send_response.assert_called_once_with("unknown command 'nosuch'", 1)
+        tool.send_event.assert_called_once_with(
+            "error", 1, message="unknown command 'nosuch'"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -156,18 +162,28 @@ class TestCustomDispatch:
 
 
 class TestSendHelpers:
-    def test_send_response_targeted(self):
+    def test_send_event_targeted(self):
         tool = make_tool()
         tool.send_message = MagicMock()
 
-        tool.send_response("ok", 42)
+        tool.send_event("pong", 42)
 
-        tool.send_message.assert_called_once_with(json.dumps({"result": "ok"}), 42)
+        tool.send_message.assert_called_once_with(json.dumps({"event": "pong"}), 42)
 
-    def test_send_response_broadcast(self):
+    def test_send_event_with_kwargs(self):
         tool = make_tool()
         tool.send_message = MagicMock()
 
-        tool.send_response("ok")
+        tool.send_event("state", 42, state="running")
 
-        tool.send_message.assert_called_once_with(json.dumps({"result": "ok"}), None)
+        tool.send_message.assert_called_once_with(
+            json.dumps({"event": "state", "state": "running"}), 42
+        )
+
+    def test_send_event_broadcast(self):
+        tool = make_tool()
+        tool.send_message = MagicMock()
+
+        tool.send_event("pong")
+
+        tool.send_message.assert_called_once_with(json.dumps({"event": "pong"}), None)

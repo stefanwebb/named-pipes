@@ -113,8 +113,8 @@ class _CpipeClient(TextNamedPipe):
 
     def msg_handler_fn(self, msg: dict, pid: int | None):
         # --- subscribe acknowledgements ---
-        # Tool protocol: {"result": "subscribed"}
-        if msg.get("result") == "subscribed":
+        # Tool protocol: {"event": "subscribed"}
+        if msg.get("event") == "subscribed":
             self.subscribed.set()
             return
 
@@ -123,24 +123,29 @@ class _CpipeClient(TextNamedPipe):
             self.subscribed.set()
             return
 
-        # --- streaming (tool protocol chunks) ---
-        # End sentinel: {"result": "", "done": true}
+        # --- streaming (token events with done flag) ---
+        # End sentinel: {"event": "token", "text": "", "done": true}
         if msg.get("done") is True:
             print()  # newline after streamed tokens
             self.response_received.set()
             return
 
-        # In-flight chunk: {"result": "<token>", "done": false}
+        # In-flight chunk: {"event": "token", "text": "<chunk>", "done": false}
         if "done" in msg:
             self.streaming.set()
-            print(msg.get("result", ""), end="", flush=True)
+            print(msg.get("text", ""), end="", flush=True)
             return
 
-        # --- one-shot responses ---
-        result = msg.get("result")
-        if result is not None:
-            # Tool protocol response
-            print(result)
+        # --- one-shot event responses ---
+        if "event" in msg:
+            # Extract payload: all fields except "event"
+            payload = {k: v for k, v in msg.items() if k != "event"}
+            if len(payload) == 0:
+                print(msg["event"])
+            elif len(payload) == 1:
+                print(next(iter(payload.values())))
+            else:
+                print(json.dumps(payload))
         elif "cmd" in msg:
             # Basic protocol response: {"cmd": "PONG", "data": "...", "pid": ...}
             cmd = msg["cmd"]
@@ -213,8 +218,9 @@ Examples:
   cpipe --pid /var/tmp                         list tool pipes with PIDs under /var/tmp
   cpipe --clear                                delete orphaned tool pipes under /tmp
   cpipe --clear /var/tmp                       delete orphaned tool pipes under /var/tmp
-  cpipe chat description                       get tool description
-  cpipe /tmp/tool-chat help                    get help text
+  cpipe chat get_description                   get tool description
+  cpipe /tmp/tool-chat get_help                get help text
+  cpipe chat get_state                         get current state
   cpipe chat stop                              shut down the server
   cpipe chat ping                              send a custom command
   cpipe chat greet -d Alice                    send data with a command
