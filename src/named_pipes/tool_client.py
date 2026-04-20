@@ -75,7 +75,7 @@ class ToolClient(TextNamedPipe):
 
     # --- message handler ---
 
-    def msg_handler_fn(self, msg: dict, pid: int | None):
+    def msg_handler_fn(self, msg: dict, _pid: int | None):
         if msg.get("event") == "subscribed":
             self._subscribed.set()
             return
