@@ -34,8 +34,8 @@ class _LLMClient(ToolClient):
         self._on_chunk = on_chunk
         self._on_done = on_done
 
-    def on_message(self, msg: dict):
-        if msg.get("event") == "token":
+        @self.on("token")
+        def _(msg):
             if msg.get("done") is True:
                 self._on_done()
             else:
