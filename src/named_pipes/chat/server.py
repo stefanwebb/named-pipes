@@ -124,10 +124,16 @@ class ChatServer(ToolServer):
 
     def _handle_chat_blocking(self, msg: dict, pid: int | None):
         messages = msg.get("messages", [])
-        reply = self._infer(messages)
+        self.set_state(ChatState.INFERRING)
+        try:
+            reply = self._infer(messages)
+        except Exception:
+            self.set_state(ChatState.ERROR)
+            raise
         if self._verbose:
             print(reply, flush=True)
         self.send_event("reply", pid, text=reply)
+        self.set_state(ChatState.IDLE)
 
     # -----------------------------------------------------------------------
     # Streaming helpers

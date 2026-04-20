@@ -175,20 +175,23 @@ def _resolve_pipe(pipe: str) -> tuple[str, bool]:
 _SERVE_CHOICES = ("chat", "tts", "stt")
 
 
-def _serve(kind: str) -> None:
+def _serve(kind: str, verbose: bool = False) -> None:
     """Launch a server with default config and block until interrupted."""
     if kind == "chat":
-        from named_pipes.chat import ChatServer
+        from named_pipes.chat import ChatServer, ChatConfig
 
-        cls, pipe_path = ChatServer, "/tmp/tool-chat"
+        cls = lambda: ChatServer(ChatConfig(verbose=verbose))
+        pipe_path = "/tmp/tool-chat"
     elif kind == "tts":
-        from named_pipes.tts import TTSServer
+        from named_pipes.tts import TTSServer, TTSConfig
 
-        cls, pipe_path = TTSServer, "/tmp/tool-tts"
+        cls = lambda: TTSServer(TTSConfig(verbose=verbose))
+        pipe_path = "/tmp/tool-tts"
     elif kind == "stt":
-        from named_pipes.stt import STTServer
+        from named_pipes.stt import STTServer, STTConfig
 
-        cls, pipe_path = STTServer, "/tmp/tool-stt"
+        cls = lambda: STTServer(STTConfig(verbose=verbose))
+        pipe_path = "/tmp/tool-stt"
     else:
         print(f"cpipe: unknown server type {kind!r}", file=sys.stderr)
         sys.exit(1)
@@ -329,7 +332,7 @@ Examples:
 
     # Standalone modes — PIPE and CMD are not required.
     if args.serve is not None:
-        _serve(args.serve)
+        _serve(args.serve, verbose=args.verbose)
         return
 
     if args.list is not None:

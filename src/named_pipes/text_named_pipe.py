@@ -7,6 +7,7 @@ https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
 """
 
+import fcntl
 import json
 import os
 import select
@@ -155,16 +156,37 @@ class TextNamedPipe(ABC):
                     if self._text_stop_r in readable:
                         break
                     msg = self.recv_message()
-                    if not msg:
-                        continue
-                    pid = msg.get("pid")
-                    self.msg_handler_fn(msg, pid)
+                    if msg:
+                        self.msg_handler_fn(msg, msg.get("pid"))
+                    self._drain_buffered_messages()
             finally:
                 done.set()
 
         self._text_listener_thread = threading.Thread(target=_msg_loop, daemon=True)
         self._text_listener_thread.start()
         return done
+
+    def _drain_buffered_messages(self):
+        # select() only sees the kernel-side pipe state; readline() may
+        # have pulled additional complete lines into Python's buffer.
+        # Flip the fd non-blocking and drain them here so they aren't
+        # stranded until another kernel-side write wakes select().
+        fd = self._msg_recv.fileno()
+        flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+        fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+        try:
+            while True:
+                try:
+                    line = self._msg_recv.readline()
+                except BlockingIOError:
+                    return
+                if not line:
+                    return
+                msg = json.loads(line.rstrip("\n"))
+                if msg:
+                    self.msg_handler_fn(msg, msg.get("pid"))
+        finally:
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags)
 
     def _close(self):
         if self._closed:

@@ -47,15 +47,13 @@ class _LLMClient(ToolClient):
 def main():
     with _LLMClient() as ch:
         # --- streaming ---
-        # print(f"Streaming query: {STREAMING_QUERY[0]['content']!r}")
-        # print("Response: ", end="")
-        # ch.send_command("chat", messages=STREAMING_QUERY)
-        # ch.reply_received.wait()
-        # print()  # newline after streamed chunks
+        print(f"Streaming query: {STREAMING_QUERY[0]['content']!r}")
+        print("Response: ", end="")
+        ch.send_command("chat", messages=STREAMING_QUERY)
+        ch.reply_received.wait()
+        print()  # newline after streamed chunks
 
-        # time.sleep(2)
-
-        # # --- blocking ---
+        # --- blocking ---
         ch.reply_received.clear()
         print(f"\nBlocking query: {BLOCKING_QUERY[0]['content']!r}")
         ch.send_command("chat_blocking", messages=BLOCKING_QUERY)
