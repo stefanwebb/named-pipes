@@ -112,6 +112,12 @@ class TTSServer(ToolServer):
             if self._verbose:
                 print(f"[TTS] Loading model {config.model_id!r}…")
             self._model = load_model(config.model_id)
+            if self._verbose:
+                print("[TTS] Warming up pipeline…")
+            for _ in self._model.generate(
+                " ", voice=self._voice, lang_code="a", speed=1.0
+            ):
+                pass
         except Exception:
             self.set_state(TTSState.ERROR)
             raise
