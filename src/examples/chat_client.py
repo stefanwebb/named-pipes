@@ -9,6 +9,7 @@ LLM client: subscribes to the LLM server, demonstrates both streaming
 (chat) and blocking (chat_blocking) inference requests.
 """
 
+import time
 import threading
 
 from named_pipes.tool_client import ToolClient
@@ -27,15 +28,19 @@ class _LLMClient(ToolClient):
         self.reply_received = threading.Event()
         self.response: str | None = None
 
-    def on_message(self, msg: dict):
-        event = msg.get("event")
+        @self.on("state_changed")
+        def _(msg):
+            print("on_state_changed", msg.get("state", ""))
 
-        if event == "token":
+        @self.on("token")
+        def _(msg):
             if msg.get("done") is True:
                 self.reply_received.set()
             else:
                 print(msg.get("text", ""), end="", flush=True)
-        elif event == "reply":
+
+        @self.on("reply")
+        def _(msg):
             self.response = msg.get("text", "")
             self.reply_received.set()
 
@@ -43,18 +48,20 @@ class _LLMClient(ToolClient):
 def main():
     with _LLMClient() as ch:
         # --- streaming ---
-        print(f"Streaming query: {STREAMING_QUERY[0]['content']!r}")
-        print("Response: ", end="")
-        ch.send_command("chat", messages=STREAMING_QUERY)
-        ch.reply_received.wait()
-        print()  # newline after streamed chunks
-
-        # --- blocking ---
-        # ch.reply_received.clear()
-        # print(f"\nBlocking query: {BLOCKING_QUERY[0]['content']!r}")
-        # ch.send_command("chat_blocking", messages=BLOCKING_QUERY)
+        # print(f"Streaming query: {STREAMING_QUERY[0]['content']!r}")
+        # print("Response: ", end="")
+        # ch.send_command("chat", messages=STREAMING_QUERY)
         # ch.reply_received.wait()
-        # print(f"Response: {ch.response}")
+        # print()  # newline after streamed chunks
+
+        # time.sleep(2)
+
+        # # --- blocking ---
+        ch.reply_received.clear()
+        print(f"\nBlocking query: {BLOCKING_QUERY[0]['content']!r}")
+        ch.send_command("chat_blocking", messages=BLOCKING_QUERY)
+        ch.reply_received.wait()
+        print(f"Response: {ch.response}")
 
 
 if __name__ == "__main__":
