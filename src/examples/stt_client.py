@@ -29,11 +29,15 @@ class _STTClient(ToolClient):
 
         @self.on("speech_start")
         def _(msg):
-            print("\n[speech_start] ", end="", flush=True)
+            print("[speech_start] ", end="", flush=True)
 
         @self.on("speech_end")
         def _(msg):
-            print(" [speech_end]", flush=True)
+            print("[speech_end]", flush=True)
+
+        @self.on("state_changed")
+        def _(msg):
+            print(f"\n[state_changed] {msg.get('state', '')}", flush=True)
 
 
 def main():
