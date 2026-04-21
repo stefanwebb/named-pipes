@@ -140,6 +140,15 @@ Returns the tool's current configuration as key-value pairs.
 ```
 The tool transitions to the `stopping` state, which triggers a `state_changed` broadcast to all subscribed clients, then shuts down.
 
+### Error (unknown or invalid command)
+
+If the tool receives a command it does not recognise, it sends an error event to the requesting client:
+
+```json
+// Event (to sender only)
+{ "event": "error", "message": "unknown command '<cmd>'" }
+```
+
 ---
 
 ## Tool State
