@@ -1,16 +1,11 @@
 ## New features
 
-- **`STTState` enum** — `STTServer` now tracks lifecycle state: `loading` (models loading), `listening` (waiting for speech), `transcribing` (speech detected, decoding tokens), `error`
-- **`TTSState` enum** — `TTSServer` now tracks lifecycle state: `loading` (model loading), `idle` (queue empty), `synthesizing` (generating audio for a sentence), `error`
-- **`verbose` flag** — `ChatConfig`, `STTConfig`, and `TTSConfig` each gain a `verbose: bool = False` field; when enabled, servers print inference output and progress to stdout
+- **`state_changed` handler in `stt_client`** — `_STTClient` now prints server state transitions (`[state_changed] <state>`) as they arrive
+- **`speech_start` / `speech_end` events in `TTSServer`** — server broadcasts these events at the boundaries of each synthesis pass; `tts_client` handles them
+- **KokoroPipeline warm-up** — `TTSServer` now pre-warms the Kokoro pipeline during `__init__`, reducing first-synthesis latency
 
 ## Improvements
 
-- **Handler refactor** — `ChatServer` and `ToolServer` built-in handlers moved from inline closures to named methods (`_handle_chat`, `_handle_chat_blocking`, `_register_builtin_handlers`), making them independently testable
-- **`on_ready` callback** — `stream_transcribe` now accepts an optional `on_ready` callback invoked after both the Voxtral ASR model and Silero VAD finish loading, used by `STTServer` to transition from `loading` to `listening`
-- **`state_changed` broadcasts** — all three concrete servers (`chat`, `stt`, `tts`) now broadcast `{"event": "state_changed", "state": "<value>"}` to subscribers on every state transition
-
-## Infrastructure / Documentation
-
-- **Protocol spec** (`named-pipe-tools.md`) — new "Tool State" section documenting the `state_changed` broadcast, base states, and extended states for all three tools
-- **Tool READMEs** (`chat`, `stt`, `tts`) — each README now includes a States section describing valid state values and when each occurs
+- **`@self.on()` decorator in clients** — `stt_client`, `tts_client`, and `chat_client` all migrated from `on_message` callbacks to the `@self.on()` decorator pattern introduced in `ToolClient`
+- **`--verbose` flag forwarding** — `cpipe --serve` now correctly passes the `--verbose` flag through to the server config
+- **Error event documentation** — protocol spec now documents the `error` event emitted for unknown commands
