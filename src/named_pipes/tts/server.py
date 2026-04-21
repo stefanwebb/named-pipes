@@ -106,6 +106,7 @@ class TTSServer(ToolServer):
         # Audio callback state.
         self._remainder = np.zeros(0, dtype=np.float32)
         self._audio_done = threading.Event()
+        self._is_speaking = False
 
         self.set_state(TTSState.LOADING)
         try:
@@ -144,6 +145,7 @@ class TTSServer(ToolServer):
         # Register protocol handlers.
         self.handler("text")(self._handle_text)
         self.handler("flush")(self._handle_flush)
+        self.handler("is_speaking")(self._handle_is_speaking)
 
     # -----------------------------------------------------------------------
     # Command handlers
@@ -168,6 +170,9 @@ class TTSServer(ToolServer):
             self._sentence_queue.put(self._buf.strip())
             self._buf = ""
 
+    def _handle_is_speaking(self, _msg: dict, pid: int | None) -> None:
+        self.send_event("is_speaking", pid, speaking=self._is_speaking)
+
     # -----------------------------------------------------------------------
     # TTS worker
     # -----------------------------------------------------------------------
@@ -175,7 +180,6 @@ class TTSServer(ToolServer):
     def _tts_worker(self) -> None:
         """Synthesise sentences from sentence_queue and push audio to audio_queue."""
         while True:
-            self.set_state(TTSState.IDLE)
             sentence = self._sentence_queue.get()
             if sentence is None:
                 self._audio_queue.put(None)
@@ -187,6 +191,7 @@ class TTSServer(ToolServer):
                 sentence, voice=self._voice, lang_code="a", speed=1.0
             ):
                 self._audio_queue.put(np.array(result.audio, dtype=np.float32))
+            self.set_state(TTSState.IDLE)
 
     # -----------------------------------------------------------------------
     # Audio callback
@@ -201,6 +206,12 @@ class TTSServer(ToolServer):
 
         while pos < frames:
             if self._remainder.size:
+                if not self._is_speaking:
+                    self._is_speaking = True
+                    threading.Thread(
+                        target=lambda: self.send_event("speech_start"),
+                        daemon=True,
+                    ).start()
                 take = min(frames - pos, self._remainder.size)
                 out[pos : pos + take] = self._remainder[:take]
                 self._remainder = self._remainder[take:]
@@ -217,6 +228,13 @@ class TTSServer(ToolServer):
                 raise sd.CallbackStop()
 
             self._remainder = chunk
+
+        if self._is_speaking and not self._remainder.size and self._audio_queue.empty():
+            self._is_speaking = False
+            threading.Thread(
+                target=lambda: self.send_event("speech_end"),
+                daemon=True,
+            ).start()
 
         outdata[:, 0] = out
 

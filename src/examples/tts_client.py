@@ -34,6 +34,10 @@ class _LLMClient(ToolClient):
         self._on_chunk = on_chunk
         self._on_done = on_done
 
+        @self.on("state_changed")
+        def _(msg):
+            print(f"[chat] state_changed: {msg.get('state', '')}")
+
         @self.on("token")
         def _(msg):
             if msg.get("done") is True:
@@ -47,6 +51,20 @@ class _TTSClient(ToolClient):
 
     def __init__(self):
         super().__init__("tts")
+        self.speech_ended = threading.Event()
+
+        @self.on("state_changed")
+        def _(msg):
+            print(f"[tts] state_changed: {msg.get('state', '')}")
+
+        @self.on("speech_start")
+        def _(_msg):
+            print("[tts] speaking started")
+
+        @self.on("speech_end")
+        def _(_msg):
+            print("[tts] speaking ended")
+            self.speech_ended.set()
 
     def send_text(self, token: str):
         """Send a text chunk to the TTS server."""
@@ -63,7 +81,7 @@ def main():
     with _TTSClient() as tts:
 
         def on_chunk(text: str):
-            print(text, end="", flush=True)
+            # print(text, end="", flush=True)
             tts.send_text(text)
 
         def on_done():
@@ -71,12 +89,12 @@ def main():
             stream_done.set()
 
         with _LLMClient(on_chunk, on_done) as llm:
-            print("Subscribed to both servers.")
-            print(f"Query: {QUERY[0]['content']!r}\nResponse: ", end="")
+            # print("Subscribed to both servers.")
+            # print(f"Query: {QUERY[0]['content']!r}\nResponse: ", end="")
             llm.send_command("chat", messages=QUERY)
 
             stream_done.wait()
-            print()  # newline after streamed chunks
+            tts.speech_ended.wait()
 
 
 if __name__ == "__main__":
