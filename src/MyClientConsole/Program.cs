@@ -1,44 +1,75 @@
-using var channel = new PipeChannel("/tmp/agent");
+// C# ToolClient demo — connects to a Python ToolServer and sends commands.
+//
+// Start the demo Python server first, or let this program launch it:
+//   python src/examples/demo_server.py
+//
+// Then:
+//   cd src/MyClientConsole && dotnet run
 
-byte[] payload = [1, 2, 3, 4, 5, 255, 128, 0];
+using System.Diagnostics;
+using System.Text.Json.Nodes;
 
-// Remaining commands to send; each is dispatched from the listener thread
-// after the previous response arrives.
-Queue<Action> steps = new([
-    () => channel.SendMessage("GREET", "World"),
-    () => channel.SendMessage("TIME"),
-    () => channel.SendMessage("ECHO", "hello there"),
-    () =>
-    {
-        // SEND_BYTES: send command + data; the data listener thread will fire
-        // DataReceived when Python echoes the bytes back, and the message
-        // listener will then pick up the "OK" status message independently.
-        Console.WriteLine($"  Sending data: [{string.Join(", ", payload)}]");
-        channel.SendMessage("SEND_BYTES");
-        channel.SendData(payload);
-    },
-    () => channel.SendMessage("QUIT"),
-]);
+const string ToolName = "demo";
+var pipePath = $"/tmp/tool-{ToolName}";
 
-channel.MessageReceived += (sender, e) =>
+if (!File.Exists(pipePath))
 {
-    var ch = (PipeChannel)sender!;
+    Console.WriteLine("Server pipe not found; launching Python demo server ...");
+    var script = Path.Combine(FindProjectRoot(), "src", "examples", "demo_server.py");
+    Process.Start(new ProcessStartInfo
+    {
+        FileName = "python",
+        Arguments = $"\"{script}\"",
+        UseShellExecute = false,
+    });
+}
 
-    Console.WriteLine($"Response: cmd={e.Cmd} data={e.Data}");
+// Wait up to 5 s for the server's upstream FIFO to appear
+var deadline = DateTime.UtcNow.AddSeconds(5);
+while (!File.Exists(pipePath) && DateTime.UtcNow < deadline)
+    Thread.Sleep(100);
 
-    if (e.Cmd == "BYE")
-        ch.done.Set();
+if (!File.Exists(pipePath))
+{
+    Console.Error.WriteLine($"Timed out waiting for {pipePath}. Is the Python server running?");
+    return 1;
+}
 
-    if (steps.TryDequeue(out var next))
-        next();
-};
+using var client = new ToolClient(ToolName);
+var stoppingSeen = new ManualResetEventSlim(false);
 
-channel.DataReceived += (_, e) => Console.WriteLine($"Data:     [{string.Join(", ", e.Data)}]");
+client.On("pong",          _ => Console.WriteLine("< pong"));
+client.On("state",         msg => Console.WriteLine($"< state: {msg["state"]}"));
+client.On("description",   msg => Console.WriteLine($"< description: {msg["description"]}"));
+client.On("greeting",      msg => Console.WriteLine($"< greeting: {msg["message"]}"));
+client.On("state_changed", msg =>
+{
+    Console.WriteLine($"< state_changed -> {msg["state"]}");
+    if (msg["state"]?.GetValue<string>() == "stopping")
+        stoppingSeen.Set();
+});
 
-var done = channel.StartListening();
+client.StartListening();
+client.Subscribe();
 
-// Kick off the chain from the main thread
-Console.WriteLine("Sending:  PING");
-channel.SendMessage("PING");
+Console.WriteLine("> ping");            client.SendCommand("ping");
+Console.WriteLine("> get_state");      client.SendCommand("get_state");
+Console.WriteLine("> get_description"); client.SendCommand("get_description");
+Console.WriteLine("> greet Alice");    client.SendCommand("greet", new JsonObject { ["name"] = "Alice" });
 
-done.Wait();
+Thread.Sleep(300); // let responses arrive before stopping
+
+Console.WriteLine("> stop");
+client.SendCommand("stop");
+stoppingSeen.Wait(TimeSpan.FromSeconds(3));
+
+Console.WriteLine("Done.");
+return 0;
+
+static string FindProjectRoot()
+{
+    var dir = new DirectoryInfo(AppContext.BaseDirectory);
+    while (dir.Parent is not null && !Directory.Exists(Path.Combine(dir.FullName, "src")))
+        dir = dir.Parent;
+    return dir.FullName;
+}
