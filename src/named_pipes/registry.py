@@ -23,7 +23,8 @@ class Backend(str, Enum):
     # chat backends
     TRANSFORMERS = "transformers"
     VLLM = "vllm"
-    VLLM_OMNI = "vllm_omni"
+    VLLM_MLX = "vlm_mlx"
+    MLX_LM = "mlx_lm"
     # TTS backends
     MLX_AUDIO = "mlx_audio"
     # STT backends
@@ -72,3 +73,14 @@ def models_for(server: ServerType) -> list[ModelEntry]:
 def default_for(server: ServerType) -> ModelEntry | None:
     """Return the default model for *server*, or None if not set."""
     return next((m for m in REGISTRY if server in m.servers and m.default), None)
+
+
+def models_for_backend(server: ServerType, backend: Backend) -> list[ModelEntry]:
+    """Return all registry entries compatible with *server* and *backend*."""
+    return [m for m in REGISTRY if server in m.servers and backend in m.backends]
+
+
+def default_for_backend(server: ServerType, backend: Backend) -> ModelEntry | None:
+    """Return the default model for *server*/*backend*, falling back to first match."""
+    entries = models_for_backend(server, backend)
+    return next((m for m in entries if m.default), entries[0] if entries else None)

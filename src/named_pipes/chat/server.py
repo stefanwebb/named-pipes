@@ -22,6 +22,7 @@ chat_blocking
 """
 
 import json
+import platform
 import threading
 from enum import Enum
 
@@ -30,9 +31,15 @@ from pydantic import BaseModel
 from named_pipes.tool_server import ToolServer, ToolState
 
 
-class Backend(Enum):
-    VLLM = "vllm"
-    TRANSFORMERS = "transformers"
+if platform.system() == "Darwin":
+    class Backend(Enum):
+        TRANSFORMERS = "transformers"
+        VLLM_MLX = "vllm_mlx"
+        MLX_LM = "mlx_lm"
+else:
+    class Backend(Enum):
+        TRANSFORMERS = "transformers"
+        VLLM = "vllm"
 
 
 class ChatState(Enum):
@@ -47,7 +54,7 @@ class ChatState(Enum):
 class ChatConfig(BaseModel):
     name: str = "chat"
     model: str = "Qwen/Qwen3.5-0.8B"
-    backend: Backend = Backend.TRANSFORMERS
+    backend: Backend = Backend.TRANSFORMERS if platform.system() == "Darwin" else Backend.VLLM
     description: str = "LLM chat server over a named pipe."
     help_text: str | None = None
     backend_kwargs: dict = {"max_new_tokens": 256, "do_sample": False}

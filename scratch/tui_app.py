@@ -1,8 +1,9 @@
 import json
 
 from named_pipes.chat.server import Backend
+from named_pipes.registry import Backend as RegBackend, ServerType, default_for_backend, models_for_backend
 from named_pipes.system import get_system_info, get_tools_info, ToolInfo
-from textual.app import App, ComposeResult
+from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 from textual.widgets import (
     Footer,
@@ -17,6 +18,28 @@ from textual.widgets import (
     TextArea,
 )
 from textual.containers import Horizontal, Vertical
+
+
+def _reg_backend(backend: Backend) -> RegBackend | None:
+    try:
+        return RegBackend[backend.name]
+    except KeyError:
+        return None
+
+
+def _model_options(backend: Backend) -> list[tuple[str, str]]:
+    rb = _reg_backend(backend)
+    if rb is None:
+        return []
+    return [(m.hub_id, m.hub_id) for m in models_for_backend(ServerType.CHAT, rb)]
+
+
+def _default_model(backend: Backend) -> str | None:
+    rb = _reg_backend(backend)
+    if rb is None:
+        return None
+    entry = default_for_backend(ServerType.CHAT, rb)
+    return entry.hub_id if entry else None
 
 
 def _tools_str(tools: list[ToolInfo]) -> str:
@@ -85,7 +108,11 @@ class TuiApp(App):
                                 yield Input(value="chat", id="chat-name")
                             with Horizontal(classes="field-row"):
                                 yield Label("model:")
-                                yield Input(value="Qwen/Qwen3.5-0.8B", id="chat-model")
+                                yield Select(
+                                    _model_options(Backend.TRANSFORMERS),
+                                    value=_default_model(Backend.TRANSFORMERS),
+                                    id="chat-model",
+                                )
                             with Horizontal(classes="field-row"):
                                 yield Label("backend:")
                                 yield Select(
@@ -96,9 +123,6 @@ class TuiApp(App):
                             with Horizontal(classes="field-row"):
                                 yield Label("description:")
                                 yield Input(value="LLM chat server over a named pipe.", id="chat-description")
-                            with Horizontal(classes="field-row"):
-                                yield Label("help_text:")
-                                yield Input(placeholder="(optional)", id="chat-help-text")
                             with Horizontal(classes="field-row"):
                                 yield Label("backend_kwargs:")
                                 yield TextArea(
@@ -114,15 +138,31 @@ class TuiApp(App):
                         yield Label("Speech-to-text content goes here.")
         yield Footer()
 
-    def on_mount(self) -> None:
-        self.run_worker(self._load_tools, thread=True)
-
     def _load_tools(self) -> None:
         tools = get_tools_info()
         self.call_from_thread(self._update_tools, tools)
 
     def _update_tools(self, tools: list[ToolInfo]) -> None:
         self.query_one("#tools-content", Label).update(_tools_str(tools))
+
+    def on_mount(self) -> None:
+        self._chat_backend: Backend = Backend.TRANSFORMERS
+        self.run_worker(self._load_tools, thread=True)
+
+    @on(Select.Changed, "#chat-backend")
+    def on_chat_backend_changed(self, event: Select.Changed) -> None:
+        backend: Backend = event.value
+        options = _model_options(backend)
+        if not options:
+            self.notify(f"No models registered for {backend.value}", severity="error")
+            self.query_one("#chat-backend", Select).value = self._chat_backend
+            return
+        self._chat_backend = backend
+        model_select = self.query_one("#chat-model", Select)
+        current = model_select.value
+        model_select.set_options(options)
+        if not any(v == current for _, v in options):
+            model_select.value = _default_model(backend) or Select.BLANK
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one("#outer-tabs", TabbedContent).active = tab_id
