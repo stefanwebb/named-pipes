@@ -9,6 +9,9 @@ Model registry — catalogue of known models, the server type(s) they work
 with, and the backend(s) each is compatible with.
 """
 
+# TODO: Make the registry load from a toml or json file
+# TODO: Make chat.server.Backend enum derive from registry
+
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -29,6 +32,47 @@ class Backend(str, Enum):
     MLX_AUDIO = "mlx_audio"
     # STT backends
     VOXTRAL = "voxtral"
+
+
+@dataclass
+class BackendEntry:
+    name: str                  # Python library name / import name
+    servers: list[ServerType]
+    platforms: list[str]       # platform.system() values: "Darwin", "Linux"
+
+
+BACKENDS: dict[Backend, BackendEntry] = {
+    Backend.TRANSFORMERS: BackendEntry(
+        name="transformers",
+        servers=[ServerType.CHAT],
+        platforms=["Darwin", "Linux"],
+    ),
+    Backend.VLLM: BackendEntry(
+        name="vllm",
+        servers=[ServerType.CHAT],
+        platforms=["Linux"],
+    ),
+    Backend.VLLM_MLX: BackendEntry(
+        name="vllm_mlx",
+        servers=[ServerType.CHAT],
+        platforms=["Darwin"],
+    ),
+    Backend.MLX_LM: BackendEntry(
+        name="mlx_lm",
+        servers=[ServerType.CHAT],
+        platforms=["Darwin"],
+    ),
+    Backend.MLX_AUDIO: BackendEntry(
+        name="mlx_audio",
+        servers=[ServerType.TTS],
+        platforms=["Darwin"],
+    ),
+    Backend.VOXTRAL: BackendEntry(
+        name="voxtral",
+        servers=[ServerType.STT],
+        platforms=["Darwin"],
+    ),
+}
 
 
 @dataclass

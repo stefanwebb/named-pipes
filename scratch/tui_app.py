@@ -1,11 +1,16 @@
 import json
+import os
+import subprocess
+import sys
 
 from named_pipes.chat.server import Backend
 from named_pipes.registry import Backend as RegBackend, ServerType, default_for_backend, models_for_backend
 from named_pipes.system import get_system_info, get_tools_info, ToolInfo
+from named_pipes.utils import _is_fifo_connected
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 from textual.widgets import (
+    Button,
     Footer,
     Header,
     Input,
@@ -132,6 +137,7 @@ class TuiApp(App):
                             with Horizontal(classes="field-row"):
                                 yield Label("verbose:")
                                 yield Switch(value=False, id="chat-verbose")
+                            yield Button("Launch", id="chat-launch", variant="success")
                     with TabPane("Text-to-speech", id="launcher-tts"):
                         yield Label("Text-to-speech content goes here.")
                     with TabPane("Speech-to-text", id="launcher-stt"):
@@ -163,6 +169,43 @@ class TuiApp(App):
         model_select.set_options(options)
         if not any(v == current for _, v in options):
             model_select.value = _default_model(backend) or Select.BLANK
+
+    @on(Button.Pressed, "#chat-launch")
+    def on_chat_launch(self) -> None:
+        name = self.query_one("#chat-name", Input).value.strip()
+        pipe_path = f"/tmp/tool-{name}"
+        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
+            self.notify(f"Tool '{name}' is already running", severity="error")
+            return
+
+        backend = self.query_one("#chat-backend", Select).value
+        model = self.query_one("#chat-model", Select).value
+        description = self.query_one("#chat-description", Input).value.strip()
+        verbose = self.query_one("#chat-verbose", Switch).value
+
+        try:
+            backend_kwargs = json.loads(self.query_one("#backend-kwargs", TextArea).text)
+        except json.JSONDecodeError:
+            self.notify("backend_kwargs is not valid JSON", severity="error")
+            return
+
+        config = {
+            "name": name,
+            "model": model,
+            "backend": backend.value,
+            "description": description,
+            "backend_kwargs": backend_kwargs,
+            "verbose": verbose,
+        }
+        log_path = f"/tmp/tool-{name}.log"
+        log = open(log_path, "w")
+        subprocess.Popen(
+            [sys.executable, "-m", "named_pipes.chat.launch", json.dumps(config)],
+            start_new_session=True,
+            stdout=log,
+            stderr=log,
+        )
+        self.notify(f"Launched chat server '{name}' — log: {log_path}")
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one("#outer-tabs", TabbedContent).active = tab_id

@@ -31,15 +31,11 @@ from pydantic import BaseModel
 from named_pipes.tool_server import ToolServer, ToolState
 
 
-if platform.system() == "Darwin":
-    class Backend(Enum):
-        TRANSFORMERS = "transformers"
-        VLLM_MLX = "vllm_mlx"
-        MLX_LM = "mlx_lm"
-else:
-    class Backend(Enum):
-        TRANSFORMERS = "transformers"
-        VLLM = "vllm"
+class Backend(Enum):
+    TRANSFORMERS = "transformers"
+    VLLM = "vllm"
+    VLLM_MLX = "vllm_mlx"
+    MLX_LM = "mlx_lm"
 
 
 class ChatState(Enum):
