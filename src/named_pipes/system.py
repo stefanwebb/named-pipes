@@ -8,10 +8,12 @@ https://creativecommons.org/licenses/by-sa/4.0/deed.en
 """
 
 import importlib.metadata
+import os
 import platform
+import threading
 from dataclasses import dataclass, field
 
-from named_pipes.utils import get_version
+from named_pipes.utils import get_version, scan_pipes
 
 
 def _optional_version(package: str) -> str | None:
@@ -96,6 +98,7 @@ class SystemInfo:
     torch_version: str | None
     transformers_version: str | None
     vllm_version: str | None
+    vllm_omni_version: str | None
     mlx_lm_version: str | None
     vllm_mlx_version: str | None
     mlx_audio_version: str | None
@@ -122,6 +125,7 @@ class SystemInfo:
             ("torch", self.torch_version, True),
             ("transformers", self.transformers_version, True),
             ("vllm", self.vllm_version, not is_mac),
+            ("vllm_omni", self.vllm_omni_version, not is_mac),
             ("mlx_lm", self.mlx_lm_version, is_mac),
             ("mlx_audio", self.mlx_audio_version, is_mac),
             ("vllm_mlx", self.vllm_mlx_version, is_mac),
@@ -137,6 +141,72 @@ class SystemInfo:
         return f"Hardware\n{self.hardware_str()}\n\nLibraries\n{self.libraries_str()}"
 
 
+@dataclass
+class ToolInfo:
+    name: str
+    running: bool
+    description: str | None = None
+
+
+def _tool_name_from_path(path: str) -> str | None:
+    """Extract tool name from /tmp/tool-{name}, ignoring per-pid pipes."""
+    basename = os.path.basename(path)
+    if not basename.startswith("tool-"):
+        return None
+    suffix = basename[len("tool-"):]
+    # per-pid downstream pipes end with -<digits>
+    parts = suffix.rsplit("-", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        return None
+    return suffix
+
+
+def _fetch_description(name: str, timeout: float = 2.0) -> str | None:
+    from named_pipes.tool_client import ToolClient
+
+    got = threading.Event()
+    result: list[str | None] = [None]
+
+    try:
+        client = ToolClient(name)
+
+        @client.on("description")
+        def _(msg):
+            result[0] = msg.get("description")
+            got.set()
+
+        client.listen()
+        client.subscribe()
+        client.send_command("get_description")
+        got.wait(timeout=timeout)
+        client.unsubscribe()
+        client._close()
+    except Exception:
+        pass
+
+    return result[0]
+
+
+def get_tools_info() -> list[ToolInfo]:
+    pipe_data = scan_pipes("/tmp", with_pids=False)
+    tools: list[ToolInfo] = []
+
+    for entry in pipe_data["connected"]:
+        name = _tool_name_from_path(entry["path"])
+        if name is None:
+            continue
+        description = _fetch_description(name)
+        tools.append(ToolInfo(name=name, running=True, description=description))
+
+    for path in pipe_data["orphaned"]:
+        name = _tool_name_from_path(path)
+        if name is None:
+            continue
+        tools.append(ToolInfo(name=name, running=False))
+
+    return sorted(tools, key=lambda t: (not t.running, t.name))
+
+
 def get_system_info() -> SystemInfo:
     return SystemInfo(
         platform=platform.platform(),
@@ -148,6 +218,7 @@ def get_system_info() -> SystemInfo:
         torch_version=_optional_version("torch"),
         transformers_version=_optional_version("transformers"),
         vllm_version=_optional_version("vllm"),
+        vllm_omni_version=_optional_version("vllm-omni"),
         mlx_lm_version=_optional_version("mlx-lm"),
         vllm_mlx_version=_optional_version("vllm-mlx"),
         mlx_audio_version=_optional_version("mlx-audio"),
