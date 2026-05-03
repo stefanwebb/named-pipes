@@ -1,7 +1,8 @@
 from named_pipes.system import get_system_info
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.widgets import Footer, Header, TabbedContent, TabPane, Label
+from textual.widgets import Footer, Header, Label, Rule, TabbedContent, TabPane
+from textual.containers import Vertical
 
 
 class TuiApp(App):
@@ -14,10 +15,18 @@ class TuiApp(App):
     ]
 
     def compose(self) -> ComposeResult:
+        info = get_system_info()
         yield Header()
         with TabbedContent(initial="tab-system"):
             with TabPane("System", id="tab-system"):
-                yield Label(str(get_system_info()))
+                with Vertical():
+                    yield Label("[bold]Hardware[/bold]", markup=True)
+                    yield Rule()
+                    yield Label(info.hardware_str())
+                    yield Label("")
+                    yield Label("[bold]Libraries[/bold]", markup=True)
+                    yield Rule()
+                    yield Label(info.libraries_str())
             with TabPane("Tab Two", id="tab-two"):
                 yield Label("Welcome to Tab Two!\n\nThis is the second tab.")
         yield Footer()

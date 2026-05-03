@@ -84,38 +84,57 @@ def _cuda_version() -> str | None:
 
 @dataclass
 class SystemInfo:
+    # Hardware
     platform: str
     cpu: str
     gpus: list[str]
     ram_gb: float | None
+    cuda_version: str | None
 
+    # Libraries
     named_pipes_version: str
     torch_version: str | None
     transformers_version: str | None
     vllm_version: str | None
-    cuda_version: str | None
     mlx_lm_version: str | None
     vllm_mlx_version: str | None
     mlx_audio_version: str | None
 
     extra: dict = field(default_factory=dict)
 
-    def __str__(self) -> str:
+    def hardware_str(self) -> str:
+        is_mac = self.platform.startswith("macOS") or "Darwin" in self.platform
         lines = [
-            f"Platform:        {self.platform}",
-            f"CPU:             {self.cpu}",
-            f"RAM:             {self.ram_gb} GB" if self.ram_gb is not None else "RAM:             unknown",
-            f"GPUs:            {', '.join(self.gpus) if self.gpus else 'none detected'}",
-            f"Named Pipes:     {self.named_pipes_version}",
-            f"PyTorch:         {self.torch_version or 'not installed'}",
-            f"Transformers:    {self.transformers_version or 'not installed'}",
-            f"vLLM:            {self.vllm_version or 'not installed'}",
-            f"CUDA:            {self.cuda_version or 'not available'}",
-            f"mlx-lm:          {self.mlx_lm_version or 'not installed'}",
-            f"vllm-mlx:        {self.vllm_mlx_version or 'not installed'}",
-            f"mlx-audio:       {self.mlx_audio_version or 'not installed'}",
+            f"  Platform:      {self.platform}",
+            f"  CPU:           {self.cpu}",
+            f"  RAM:           {self.ram_gb} GB" if self.ram_gb is not None else "  RAM:           unknown",
+            f"  GPUs:          {', '.join(self.gpus) if self.gpus else 'none detected'}",
+        ]
+        if not is_mac:
+            lines.append(f"  CUDA:          {self.cuda_version or 'not available'}")
+        return "\n".join(lines)
+
+    def libraries_str(self) -> str:
+        is_mac = self.platform.startswith("macOS") or "Darwin" in self.platform
+        entries: list[tuple[str, str | None, bool]] = [
+            # (label, version, always_show)
+            ("named_pipes", self.named_pipes_version, True),
+            ("torch", self.torch_version, True),
+            ("transformers", self.transformers_version, True),
+            ("vllm", self.vllm_version, not is_mac),
+            ("mlx_lm", self.mlx_lm_version, is_mac),
+            ("mlx_audio", self.mlx_audio_version, is_mac),
+            ("vllm_mlx", self.vllm_mlx_version, is_mac),
+        ]
+        lines = [
+            f"  {name:<14} {ver if ver is not None else 'not installed'}"
+            for name, ver, show in entries
+            if show
         ]
         return "\n".join(lines)
+
+    def __str__(self) -> str:
+        return f"Hardware\n{self.hardware_str()}\n\nLibraries\n{self.libraries_str()}"
 
 
 def get_system_info() -> SystemInfo:
@@ -124,11 +143,11 @@ def get_system_info() -> SystemInfo:
         cpu=_cpu_info(),
         gpus=_gpu_info(),
         ram_gb=_ram_gb(),
+        cuda_version=_cuda_version(),
         named_pipes_version=get_version(),
         torch_version=_optional_version("torch"),
         transformers_version=_optional_version("transformers"),
         vllm_version=_optional_version("vllm"),
-        cuda_version=_cuda_version(),
         mlx_lm_version=_optional_version("mlx-lm"),
         vllm_mlx_version=_optional_version("vllm-mlx"),
         mlx_audio_version=_optional_version("mlx-audio"),
