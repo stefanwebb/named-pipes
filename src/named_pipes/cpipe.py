@@ -348,9 +348,9 @@ Examples:
         return
 
     if not args.pipe or not args.cmd:
-        parser.error(
-            "PIPE and CMD are required unless --list, --pid, or --clear is given"
-        )
+        from named_pipes.tui_app import TuiApp
+        TuiApp().run()
+        return
 
     pipe, auto_tool = _resolve_pipe(args.pipe)
 

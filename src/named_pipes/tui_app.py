@@ -76,7 +76,7 @@ class TuiApp(App):
         width: 1fr;
     }
     #backend-kwargs {
-        height: 5;
+        height: 10;
         width: 1fr;
     }
     """
@@ -116,6 +116,7 @@ class TuiApp(App):
                                 yield Select(
                                     _model_options(Backend.TRANSFORMERS),
                                     value=_default_model(Backend.TRANSFORMERS),
+                                    allow_blank=False,
                                     id="chat-model",
                                 )
                             with Horizontal(classes="field-row"):
@@ -123,6 +124,7 @@ class TuiApp(App):
                                 yield Select(
                                     [(b.value, b) for b in Backend],
                                     value=Backend.TRANSFORMERS,
+                                    allow_blank=False,
                                     id="chat-backend",
                                 )
                             with Horizontal(classes="field-row"):
