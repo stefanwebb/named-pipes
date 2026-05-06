@@ -2,15 +2,19 @@ import json
 import os
 import subprocess
 import sys
+import threading
 
+from rich.text import Text
 from named_pipes.chat.server import Backend
 from named_pipes.registry import Backend as RegBackend, ServerType, default_for_backend, models_for_backend
-from named_pipes.system import get_system_info, get_tools_info, ToolInfo
-from named_pipes.utils import _is_fifo_connected
+from named_pipes.system import get_system_info, _tool_name_from_path
+from named_pipes.tool_client import ToolClient
+from named_pipes.utils import _is_fifo_connected, scan_pipes
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 from textual.widgets import (
     Button,
+    DataTable,
     Footer,
     Header,
     Input,
@@ -22,7 +26,55 @@ from textual.widgets import (
     TabPane,
     TextArea,
 )
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
+
+TOOL_POLL_INTERVAL = 1.0
+
+
+class _ManagedClient:
+    """Persistent ToolClient with cached description and one-shot ping/state polling."""
+
+    def __init__(self, name: str):
+        self.name = name
+        self.description: str = ""
+        self._client = ToolClient(name)
+        self._pong_event = threading.Event()
+        self._state_event = threading.Event()
+        self._state_val: str = "unknown"
+
+        @self._client.on("pong")
+        def _(msg):
+            self._pong_event.set()
+
+        @self._client.on("state")
+        def _(msg):
+            self._state_val = msg.get("state", "unknown")
+            self._state_event.set()
+
+        @self._client.on("description")
+        def _(msg):
+            self.description = msg.get("description") or ""
+
+        self._client.listen()
+        self._client.subscribe()
+        self._client.send_command("get_description")
+
+    def poll(self) -> tuple[bool, str]:
+        """Send ping + get_state; return (healthy, state). Blocks up to ~0.5 s each."""
+        self._pong_event.clear()
+        self._state_event.clear()
+        self._client.send_command("ping")
+        self._client.send_command("get_state")
+        healthy = self._pong_event.wait(timeout=0.5)
+        self._state_event.wait(timeout=0.5)
+        return healthy, self._state_val
+
+    def close(self) -> None:
+        try:
+            self._client.unsubscribe()
+            self._client._close()
+        except Exception:
+            pass
 
 
 def _reg_backend(backend: Backend) -> RegBackend | None:
@@ -47,18 +99,6 @@ def _default_model(backend: Backend) -> str | None:
     return entry.hub_id if entry else None
 
 
-def _tools_str(tools: list[ToolInfo]) -> str:
-    if not tools:
-        return "  no tools found"
-    lines = []
-    for t in tools:
-        status = "running" if t.running else "orphaned"
-        desc = f"  {t.description}" if t.description else ""
-        lines.append(f"  {t.name:<20} [{status}]{desc}")
-    return "\n".join(lines)
-
-
-
 class TuiApp(App):
     TITLE = "Named Pipes for Agentic Tools"
 
@@ -79,6 +119,12 @@ class TuiApp(App):
         height: 10;
         width: 1fr;
     }
+    .system-col {
+        border: round $primary;
+        padding: 1;
+        margin: 1;
+        overflow-y: auto;
+    }
     """
 
     BINDINGS = [
@@ -93,22 +139,23 @@ class TuiApp(App):
         yield Header()
         with TabbedContent(initial="tab-system", id="outer-tabs"):
             with TabPane("System", id="tab-system"):
-                with Vertical():
-                    yield Label("[bold]Hardware[/bold]", markup=True)
-                    yield Rule()
-                    yield Label(info.hardware_str())
-                    yield Label("")
-                    yield Label("[bold]Libraries[/bold]", markup=True)
-                    yield Rule()
-                    yield Label(info.libraries_str())
-                    yield Label("")
-                    yield Label("[bold]Tools[/bold]", markup=True)
-                    yield Rule()
-                    yield Label("scanning...", id="tools-content")
+                with Horizontal():
+                    with Vertical(classes="system-col") as left_col:
+                        left_col.border_title = "Info"
+                        yield Label("[bold]Hardware[/bold]", markup=True)
+                        yield Rule()
+                        yield Label(info.hardware_str())
+                        yield Label("")
+                        yield Label("[bold]Libraries[/bold]", markup=True)
+                        yield Rule()
+                        yield Label(info.libraries_str())
+                    with Vertical(classes="system-col") as right_col:
+                        right_col.border_title = "Tools"
+                        yield DataTable(id="tools-table", show_cursor=False)
             with TabPane("Launcher", id="tab-launcher"):
                 with TabbedContent(initial="launcher-chat"):
                     with TabPane("Chat", id="launcher-chat"):
-                        with Vertical():
+                        with VerticalScroll():
                             with Horizontal(classes="field-row"):
                                 yield Label("name:")
                                 yield Input(value="chat", id="chat-name")
@@ -146,7 +193,7 @@ class TuiApp(App):
                     with TabPane("Speech-to-text", id="launcher-stt"):
                         yield Label("Speech-to-text content goes here.")
             with TabPane("Messenger", id="tab-messenger"):
-                with Vertical():
+                with VerticalScroll():
                     with Horizontal(classes="field-row"):
                         yield Label("tool:")
                         yield Select(
@@ -157,24 +204,100 @@ class TuiApp(App):
                         )
         yield Footer()
 
-    def _load_tools(self) -> None:
-        tools = get_tools_info()
-        self.call_from_thread(self._update_tools, tools)
+    def on_mount(self) -> None:
+        self._chat_backend: Backend = Backend.TRANSFORMERS
+        self._managed_clients: dict[str, _ManagedClient] = {}
+        self._table_rows: set[str] = set()
+        self._stop_polling = threading.Event()
 
-    def _update_tools(self, tools: list[ToolInfo]) -> None:
-        self.query_one("#tools-content", Label).update(_tools_str(tools))
-        running = [(t.name, t.name) for t in tools if t.running]
+        table = self.query_one("#tools-table", DataTable)
+        table.add_column("", key="health", width=2)
+        table.add_column("Name", key="name")
+        table.add_column("State", key="state")
+        table.add_column("Description", key="description")
+
+        self.run_worker(self._poll_loop, thread=True)
+
+    def on_unmount(self) -> None:
+        self._stop_polling.set()
+        for mc in self._managed_clients.values():
+            mc.close()
+
+    def _poll_loop(self) -> None:
+        while True:
+            self._do_poll()
+            if self._stop_polling.wait(timeout=TOOL_POLL_INTERVAL):
+                break
+
+    def _do_poll(self) -> None:
+        pipe_data = scan_pipes("/tmp", with_pids=False)
+
+        connected_names: set[str] = set()
+        for entry in pipe_data.get("connected", []):
+            name = _tool_name_from_path(entry["path"])
+            if name:
+                connected_names.add(name)
+
+        orphaned_names: set[str] = set()
+        for path in pipe_data.get("orphaned", []):
+            name = _tool_name_from_path(path)
+            if name:
+                orphaned_names.add(name)
+
+        # close connections for tools that are no longer connected
+        for name in set(self._managed_clients) - connected_names:
+            self._managed_clients.pop(name).close()
+
+        # open connections for newly discovered tools
+        for name in connected_names - set(self._managed_clients):
+            try:
+                self._managed_clients[name] = _ManagedClient(name)
+            except Exception:
+                pass
+
+        statuses: list[tuple[str, bool, str, str]] = []
+
+        for name, mc in list(self._managed_clients.items()):
+            try:
+                healthy, state = mc.poll()
+            except Exception:
+                healthy, state = False, "error"
+            statuses.append((name, healthy, state, mc.description))
+
+        for name in sorted(orphaned_names):
+            statuses.append((name, False, "orphaned", ""))
+
+        self.call_from_thread(self._refresh_tool_table, statuses)
+
+    def _refresh_tool_table(self, statuses: list[tuple[str, bool, str, str]]) -> None:
+        table = self.query_one("#tools-table", DataTable)
+        new_names = {s[0] for s in statuses}
+
+        for name in self._table_rows - new_names:
+            table.remove_row(name)
+        self._table_rows &= new_names
+
+        for name, healthy, state, description in statuses:
+            health = Text("●", style="green bold") if healthy else Text("●", style="red bold")
+            if name in self._table_rows:
+                table.update_cell(name, "health", health)
+                table.update_cell(name, "state", state)
+                table.update_cell(name, "description", description)
+            else:
+                table.add_row(health, name, state, description, key=name)
+                self._table_rows.add(name)
+
+        running_names = [name for name, healthy, _, _ in statuses if healthy]
         messenger_select = self.query_one("#messenger-tool", Select)
-        if running:
-            messenger_select.set_options(running)
-            messenger_select.value = running[0][1]
+        if running_names:
+            options = [(n, n) for n in running_names]
+            current_val = messenger_select.value
+            messenger_select.set_options(options)
+            if not any(v == current_val for _, v in options):
+                messenger_select.value = running_names[0]
             messenger_select.disabled = False
         else:
             messenger_select.disabled = True
-
-    def on_mount(self) -> None:
-        self._chat_backend: Backend = Backend.TRANSFORMERS
-        self.run_worker(self._load_tools, thread=True)
 
     @on(Select.Changed, "#chat-backend")
     def on_chat_backend_changed(self, event: Select.Changed) -> None:

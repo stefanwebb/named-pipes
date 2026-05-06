@@ -213,6 +213,7 @@ def get_system_info() -> SystemInfo:
         cpu=_cpu_info(),
         gpus=_gpu_info(),
         ram_gb=_ram_gb(),
+        # Replace with a dictionary from library name to version
         cuda_version=_cuda_version(),
         named_pipes_version=get_version(),
         torch_version=_optional_version("torch"),
