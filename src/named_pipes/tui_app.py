@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import threading
+import types
 
 from rich.text import Text
 from named_pipes.chat.server import Backend
@@ -30,6 +31,8 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.message import Message
 
 TOOL_POLL_INTERVAL = 1.0
+
+_MESSENGER_COMMANDS = ["get_state", "get_description", "get_help", "get_config", "stop"]
 
 
 class _ToolsTable(DataTable):
@@ -61,9 +64,9 @@ class _ManagedClient:
     def __init__(self, name: str):
         self.name = name
         self.description: str = ""
+        self.on_event: callable | None = None
         self._client = ToolClient(name)
         self._pong_event = threading.Event()
-        self._state_event = threading.Event()
         self._state_val: str = "unknown"
 
         @self._client.on("pong")
@@ -73,25 +76,41 @@ class _ManagedClient:
         @self._client.on("state")
         def _(msg):
             self._state_val = msg.get("state", "unknown")
-            self._state_event.set()
+
+        @self._client.on("state_changed")
+        def _(msg):
+            self._state_val = msg.get("state", self._state_val)
 
         @self._client.on("description")
         def _(msg):
             self.description = msg.get("description") or ""
 
+        # Patch msg_handler_fn to forward all non-internal events to on_event
+        _orig = self._client.__class__.msg_handler_fn
+        _mc = self
+
+        def _patched(client_self, msg, pid):
+            _orig(client_self, msg, pid)
+            cb = _mc.on_event
+            if cb is not None and msg.get("event") not in ("subscribed",):
+                cb(msg)
+
+        self._client.msg_handler_fn = types.MethodType(_patched, self._client)
+
         self._client.listen()
         self._client.subscribe()
         self._client.send_command("get_description")
+        self._client.send_command("get_state")
 
     def poll(self) -> tuple[bool, str]:
-        """Send ping + get_state; return (healthy, state). Blocks up to ~0.5 s each."""
+        """Send ping; return (healthy, state). State is maintained via events."""
         self._pong_event.clear()
-        self._state_event.clear()
         self._client.send_command("ping")
-        self._client.send_command("get_state")
         healthy = self._pong_event.wait(timeout=0.5)
-        self._state_event.wait(timeout=0.5)
         return healthy, self._state_val
+
+    def send_command(self, cmd: str, **kwargs) -> None:
+        self._client.send_command(cmd, **kwargs)
 
     def close(self) -> None:
         try:
@@ -240,6 +259,14 @@ class TuiApp(App):
                         with Horizontal(classes="field-row"):
                             yield Label("state:")
                             yield Label("—", id="messenger-state")
+                        with Horizontal(classes="field-row"):
+                            yield Label("command:")
+                            yield Select(
+                                [(c, c) for c in _MESSENGER_COMMANDS],
+                                allow_blank=False,
+                                id="messenger-cmd",
+                            )
+                        yield Button("Send", id="messenger-send", variant="primary", disabled=True)
                     with Vertical(classes="system-col") as messenger_right:
                         messenger_right.border_title = "Tools"
                         yield _ToolsTable(id="tools-table-messenger", cursor_type="row", show_cursor=False)
@@ -252,6 +279,7 @@ class TuiApp(App):
         self._managed_clients: dict[str, _ManagedClient] = {}
         self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
+        self._active_messenger_tool: str | None = None
 
         for tid in self._TABLE_IDS:
             table = self.query_one(f"#{tid}", _ToolsTable)
@@ -295,7 +323,10 @@ class TuiApp(App):
         # open connections for newly discovered tools
         for name in connected_names - set(self._managed_clients):
             try:
-                self._managed_clients[name] = _ManagedClient(name)
+                mc = _ManagedClient(name)
+                if name == self._active_messenger_tool:
+                    mc.on_event = self._make_event_callback()
+                self._managed_clients[name] = mc
             except Exception:
                 pass
 
@@ -325,7 +356,12 @@ class TuiApp(App):
             rows &= new_names
 
             for name, healthy, state, description in statuses:
-                health = Text("●", style="green bold") if healthy else Text("●", style="red bold")
+                if not healthy:
+                    health = Text("●", style="red bold")
+                elif state == "idle":
+                    health = Text("●", style="grey50 bold")
+                else:
+                    health = Text("●", style="green bold")
                 if name in rows:
                     table.update_cell(name, "health", health)
                     table.update_cell(name, "state", state)
@@ -354,7 +390,13 @@ class TuiApp(App):
         healthy, state = status_map.get(name, (False, "—"))
         health_label = self.query_one("#messenger-health", Label)
         state_label = self.query_one("#messenger-state", Label)
-        health_label.update(Text("● healthy", style="green bold") if healthy else Text("● unhealthy", style="red bold"))
+        if not healthy:
+            health_text = Text("● unhealthy", style="red bold")
+        elif state == "idle":
+            health_text = Text("● idle", style="grey50 bold")
+        else:
+            health_text = Text("● healthy", style="green bold")
+        health_label.update(health_text)
         state_label.update(state)
 
     @on(_ToolsTable.RowClicked)
@@ -367,15 +409,47 @@ class TuiApp(App):
         for table in self.query(_ToolsTable):
             table.show_cursor = False
 
+    def _make_event_callback(self) -> callable:
+        def cb(msg: dict) -> None:
+            self.call_from_thread(self._on_tool_event, msg)
+        return cb
+
+    def _on_tool_event(self, msg: dict) -> None:
+        event = msg.get("event", "unknown")
+        if event == "pong":
+            return
+        if event in ("state", "state_changed"):
+            tool = self._active_messenger_tool
+            if tool and tool in self._managed_clients:
+                mc = self._managed_clients[tool]
+                self.query_one("#messenger-state", Label).update(mc._state_val)
+        data = {k: v for k, v in msg.items() if k != "event"}
+        text = f"{event}: {json.dumps(data)}" if data else event
+        self.notify(text, timeout=5)
+
     @on(Select.Changed, "#messenger-tool")
     def on_messenger_tool_changed(self, event: Select.Changed) -> None:
         name = str(event.value)
+        self._active_messenger_tool = name
+        for n, mc in self._managed_clients.items():
+            mc.on_event = self._make_event_callback() if n == name else None
         if name in self._managed_clients:
             mc = self._managed_clients[name]
             status_map = {name: (True, mc._state_val)}
         else:
             status_map = {}
         self._update_messenger_status(name, status_map)
+        self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
+
+    @on(Button.Pressed, "#messenger-send")
+    def on_messenger_send(self) -> None:
+        tool = str(self.query_one("#messenger-tool", Select).value)
+        cmd = str(self.query_one("#messenger-cmd", Select).value)
+        mc = self._managed_clients.get(tool)
+        if mc is None:
+            self.notify(f"Tool '{tool}' not connected", severity="error")
+            return
+        mc.send_command(cmd)
 
     @on(Select.Changed, "#chat-backend")
     def on_chat_backend_changed(self, event: Select.Changed) -> None:
