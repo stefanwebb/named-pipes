@@ -27,8 +27,32 @@ from textual.widgets import (
     TextArea,
 )
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.message import Message
 
 TOOL_POLL_INTERVAL = 1.0
+
+
+class _ToolsTable(DataTable):
+    class RowClicked(Message):
+        def __init__(self, row_key) -> None:
+            super().__init__()
+            self.row_key = row_key
+
+    def on_click(self, event) -> None:
+        if self.row_count == 0:
+            return
+        header_height = 1 if self.show_header else 0
+        if event.y < header_height:
+            return
+        self.show_cursor = True
+        self.call_after_refresh(self._post_row_clicked)
+
+    def _post_row_clicked(self) -> None:
+        try:
+            row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
+            self.post_message(self.RowClicked(row_key))
+        except Exception:
+            pass
 
 
 class _ManagedClient:
@@ -151,7 +175,7 @@ class TuiApp(App):
                         yield Label(info.libraries_str())
                     with Vertical(classes="system-col") as right_col:
                         right_col.border_title = "Tools"
-                        yield DataTable(id="tools-table", show_cursor=False)
+                        yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
             with TabPane("Launcher", id="tab-launcher"):
                 with TabbedContent(initial="launcher-chat"):
                     with TabPane("Chat", id="launcher-chat"):
@@ -293,11 +317,21 @@ class TuiApp(App):
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value
             messenger_select.set_options(options)
-            if not any(v == current_val for _, v in options):
-                messenger_select.value = running_names[0]
+            messenger_select.value = (
+                current_val if any(v == current_val for _, v in options) else running_names[0]
+            )
             messenger_select.disabled = False
         else:
             messenger_select.disabled = True
+
+    @on(_ToolsTable.RowClicked)
+    def on_tools_row_clicked(self, event: _ToolsTable.RowClicked) -> None:
+        name = str(event.row_key.value)
+        messenger_select = self.query_one("#messenger-tool", Select)
+        if name in self._managed_clients:
+            messenger_select.value = name
+        self.query_one("#outer-tabs", TabbedContent).active = "tab-messenger"
+        self.query_one("#tools-table", _ToolsTable).show_cursor = False
 
     @on(Select.Changed, "#chat-backend")
     def on_chat_backend_changed(self, event: Select.Changed) -> None:
