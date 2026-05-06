@@ -79,6 +79,9 @@ class STTServer(ToolServer):
         )
         self._worker.start()
 
+    def _list_interfaces(self) -> list[str]:
+        return super()._list_interfaces() + ["stt"]
+
     def _on_ready(self) -> None:
         self.set_state(STTState.LISTENING)
 

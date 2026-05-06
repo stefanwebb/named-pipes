@@ -147,6 +147,9 @@ class TTSServer(ToolServer):
         self.handler("flush")(self._handle_flush)
         self.handler("is_speaking")(self._handle_is_speaking)
 
+    def _list_interfaces(self) -> list[str]:
+        return super()._list_interfaces() + ["tts"]
+
     # -----------------------------------------------------------------------
     # Command handlers
     # -----------------------------------------------------------------------

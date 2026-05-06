@@ -104,6 +104,9 @@ class ToolServer(TextNamedPipe):
     def _get_config(self) -> dict:
         return {}
 
+    def _list_interfaces(self) -> list[str]:
+        return ["base"]
+
     # --- built-in handlers ---
 
     def _register_builtin_handlers(self):
@@ -135,6 +138,10 @@ class ToolServer(TextNamedPipe):
         @self.handler("get_config")
         def _handle_get_config(msg, pid):
             self.send_event("config", pid, **self._get_config())
+
+        @self.handler("list_interfaces")
+        def _list_interfaces(msg, pid):
+            self.send_event("interfaces", pid, interfaces=self._list_interfaces())
 
         @self.handler("stop")
         def _stop(msg, pid):

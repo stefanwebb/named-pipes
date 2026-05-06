@@ -111,6 +111,9 @@ class ChatServer(ToolServer):
         self.handler("chat")(self._handle_chat)
         self.handler("chat_blocking")(self._handle_chat_blocking)
 
+    def _list_interfaces(self) -> list[str]:
+        return super()._list_interfaces() + ["chat"]
+
     # -----------------------------------------------------------------------
     # Command handlers
     # -----------------------------------------------------------------------
