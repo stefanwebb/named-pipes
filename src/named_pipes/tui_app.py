@@ -177,68 +177,88 @@ class TuiApp(App):
                         right_col.border_title = "Tools"
                         yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
             with TabPane("Launcher", id="tab-launcher"):
-                with TabbedContent(initial="launcher-chat"):
-                    with TabPane("Chat", id="launcher-chat"):
-                        with VerticalScroll():
-                            with Horizontal(classes="field-row"):
-                                yield Label("name:")
-                                yield Input(value="chat", id="chat-name")
-                            with Horizontal(classes="field-row"):
-                                yield Label("model:")
-                                yield Select(
-                                    _model_options(Backend.TRANSFORMERS),
-                                    value=_default_model(Backend.TRANSFORMERS),
-                                    allow_blank=False,
-                                    id="chat-model",
-                                )
-                            with Horizontal(classes="field-row"):
-                                yield Label("backend:")
-                                yield Select(
-                                    [(b.value, b) for b in Backend],
-                                    value=Backend.TRANSFORMERS,
-                                    allow_blank=False,
-                                    id="chat-backend",
-                                )
-                            with Horizontal(classes="field-row"):
-                                yield Label("description:")
-                                yield Input(value="LLM chat server over a named pipe.", id="chat-description")
-                            with Horizontal(classes="field-row"):
-                                yield Label("backend_kwargs:")
-                                yield TextArea(
-                                    json.dumps({"max_new_tokens": 256, "do_sample": False}, indent=2),
-                                    id="backend-kwargs",
-                                )
-                            with Horizontal(classes="field-row"):
-                                yield Label("verbose:")
-                                yield Switch(value=False, id="chat-verbose")
-                            yield Button("Launch", id="chat-launch", variant="success")
-                    with TabPane("Text-to-speech", id="launcher-tts"):
-                        yield Label("Text-to-speech content goes here.")
-                    with TabPane("Speech-to-text", id="launcher-stt"):
-                        yield Label("Speech-to-text content goes here.")
+                with Horizontal():
+                    with Vertical(classes="system-col") as launcher_left:
+                        launcher_left.border_title = "Launch"
+                        with TabbedContent(initial="launcher-chat"):
+                            with TabPane("Chat", id="launcher-chat"):
+                                with VerticalScroll():
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("name:")
+                                        yield Input(value="chat", id="chat-name")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("model:")
+                                        yield Select(
+                                            _model_options(Backend.TRANSFORMERS),
+                                            value=_default_model(Backend.TRANSFORMERS),
+                                            allow_blank=False,
+                                            id="chat-model",
+                                        )
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("backend:")
+                                        yield Select(
+                                            [(b.value, b) for b in Backend],
+                                            value=Backend.TRANSFORMERS,
+                                            allow_blank=False,
+                                            id="chat-backend",
+                                        )
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("description:")
+                                        yield Input(value="LLM chat server over a named pipe.", id="chat-description")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("backend_kwargs:")
+                                        yield TextArea(
+                                            json.dumps({"max_new_tokens": 256, "do_sample": False}, indent=2),
+                                            id="backend-kwargs",
+                                        )
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("verbose:")
+                                        yield Switch(value=False, id="chat-verbose")
+                                    yield Button("Launch", id="chat-launch", variant="success")
+                            with TabPane("Text-to-speech", id="launcher-tts"):
+                                yield Label("Text-to-speech content goes here.")
+                            with TabPane("Speech-to-text", id="launcher-stt"):
+                                yield Label("Speech-to-text content goes here.")
+                    with Vertical(classes="system-col") as launcher_right:
+                        launcher_right.border_title = "Tools"
+                        yield _ToolsTable(id="tools-table-launcher", cursor_type="row", show_cursor=False)
             with TabPane("Messenger", id="tab-messenger"):
-                with VerticalScroll():
-                    with Horizontal(classes="field-row"):
-                        yield Label("tool:")
-                        yield Select(
-                            [("(no tools running)", "")],
-                            allow_blank=False,
-                            disabled=True,
-                            id="messenger-tool",
-                        )
+                with Horizontal():
+                    with Vertical(classes="system-col") as messenger_left:
+                        messenger_left.border_title = "Messenger"
+                        with Horizontal(classes="field-row"):
+                            yield Label("tool:")
+                            yield Select(
+                                [("(no tools running)", "")],
+                                allow_blank=False,
+                                disabled=True,
+                                id="messenger-tool",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("health:")
+                            yield Label("—", id="messenger-health")
+                        with Horizontal(classes="field-row"):
+                            yield Label("state:")
+                            yield Label("—", id="messenger-state")
+                    with Vertical(classes="system-col") as messenger_right:
+                        messenger_right.border_title = "Tools"
+                        yield _ToolsTable(id="tools-table-messenger", cursor_type="row", show_cursor=False)
         yield Footer()
+
+    _TABLE_IDS = ["tools-table", "tools-table-launcher", "tools-table-messenger"]
 
     def on_mount(self) -> None:
         self._chat_backend: Backend = Backend.TRANSFORMERS
         self._managed_clients: dict[str, _ManagedClient] = {}
-        self._table_rows: set[str] = set()
+        self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
 
-        table = self.query_one("#tools-table", DataTable)
-        table.add_column("", key="health", width=2)
-        table.add_column("Name", key="name")
-        table.add_column("State", key="state")
-        table.add_column("Description", key="description")
+        for tid in self._TABLE_IDS:
+            table = self.query_one(f"#{tid}", _ToolsTable)
+            table.add_column("", key="health", width=2)
+            table.add_column("Name", key="name")
+            table.add_column("State", key="state")
+            table.add_column("Description", key="description")
 
         self.run_worker(self._poll_loop, thread=True)
 
@@ -294,22 +314,25 @@ class TuiApp(App):
         self.call_from_thread(self._refresh_tool_table, statuses)
 
     def _refresh_tool_table(self, statuses: list[tuple[str, bool, str, str]]) -> None:
-        table = self.query_one("#tools-table", DataTable)
         new_names = {s[0] for s in statuses}
 
-        for name in self._table_rows - new_names:
-            table.remove_row(name)
-        self._table_rows &= new_names
+        for tid in self._TABLE_IDS:
+            table = self.query_one(f"#{tid}", _ToolsTable)
+            rows = self._table_rows[tid]
 
-        for name, healthy, state, description in statuses:
-            health = Text("●", style="green bold") if healthy else Text("●", style="red bold")
-            if name in self._table_rows:
-                table.update_cell(name, "health", health)
-                table.update_cell(name, "state", state)
-                table.update_cell(name, "description", description)
-            else:
-                table.add_row(health, name, state, description, key=name)
-                self._table_rows.add(name)
+            for name in rows - new_names:
+                table.remove_row(name)
+            rows &= new_names
+
+            for name, healthy, state, description in statuses:
+                health = Text("●", style="green bold") if healthy else Text("●", style="red bold")
+                if name in rows:
+                    table.update_cell(name, "health", health)
+                    table.update_cell(name, "state", state)
+                    table.update_cell(name, "description", description)
+                else:
+                    table.add_row(health, name, state, description, key=name)
+                    rows.add(name)
 
         running_names = [name for name, healthy, _, _ in statuses if healthy]
         messenger_select = self.query_one("#messenger-tool", Select)
@@ -324,6 +347,16 @@ class TuiApp(App):
         else:
             messenger_select.disabled = True
 
+        status_map = {name: (healthy, state) for name, healthy, state, _ in statuses}
+        self._update_messenger_status(str(messenger_select.value), status_map)
+
+    def _update_messenger_status(self, name: str, status_map: dict[str, tuple[bool, str]]) -> None:
+        healthy, state = status_map.get(name, (False, "—"))
+        health_label = self.query_one("#messenger-health", Label)
+        state_label = self.query_one("#messenger-state", Label)
+        health_label.update(Text("● healthy", style="green bold") if healthy else Text("● unhealthy", style="red bold"))
+        state_label.update(state)
+
     @on(_ToolsTable.RowClicked)
     def on_tools_row_clicked(self, event: _ToolsTable.RowClicked) -> None:
         name = str(event.row_key.value)
@@ -331,7 +364,18 @@ class TuiApp(App):
         if name in self._managed_clients:
             messenger_select.value = name
         self.query_one("#outer-tabs", TabbedContent).active = "tab-messenger"
-        self.query_one("#tools-table", _ToolsTable).show_cursor = False
+        for table in self.query(_ToolsTable):
+            table.show_cursor = False
+
+    @on(Select.Changed, "#messenger-tool")
+    def on_messenger_tool_changed(self, event: Select.Changed) -> None:
+        name = str(event.value)
+        if name in self._managed_clients:
+            mc = self._managed_clients[name]
+            status_map = {name: (True, mc._state_val)}
+        else:
+            status_map = {}
+        self._update_messenger_status(name, status_map)
 
     @on(Select.Changed, "#chat-backend")
     def on_chat_backend_changed(self, event: Select.Changed) -> None:
