@@ -85,6 +85,7 @@ class TuiApp(App):
         Binding("q", "quit", "Quit"),
         Binding("1", "switch_tab('tab-system')", "System"),
         Binding("2", "switch_tab('tab-launcher')", "Launcher"),
+        Binding("3", "switch_tab('tab-messenger')", "Messenger"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -144,6 +145,16 @@ class TuiApp(App):
                         yield Label("Text-to-speech content goes here.")
                     with TabPane("Speech-to-text", id="launcher-stt"):
                         yield Label("Speech-to-text content goes here.")
+            with TabPane("Messenger", id="tab-messenger"):
+                with Vertical():
+                    with Horizontal(classes="field-row"):
+                        yield Label("tool:")
+                        yield Select(
+                            [("(no tools running)", "")],
+                            allow_blank=False,
+                            disabled=True,
+                            id="messenger-tool",
+                        )
         yield Footer()
 
     def _load_tools(self) -> None:
@@ -152,6 +163,14 @@ class TuiApp(App):
 
     def _update_tools(self, tools: list[ToolInfo]) -> None:
         self.query_one("#tools-content", Label).update(_tools_str(tools))
+        running = [(t.name, t.name) for t in tools if t.running]
+        messenger_select = self.query_one("#messenger-tool", Select)
+        if running:
+            messenger_select.set_options(running)
+            messenger_select.value = running[0][1]
+            messenger_select.disabled = False
+        else:
+            messenger_select.disabled = True
 
     def on_mount(self) -> None:
         self._chat_backend: Backend = Backend.TRANSFORMERS
