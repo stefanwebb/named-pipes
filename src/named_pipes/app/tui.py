@@ -353,6 +353,7 @@ class TuiApp(App):
         self._interfaces: dict[str, dict] = {}
         self._arg_cache: dict[str, dict[str, dict[str, str]]] = {}
         self._had_any_tools: bool = False
+        self._watched_tool: str | None = None
 
         for tid in self._TABLE_IDS:
             table = self.query_one(f"#{tid}", _ToolsTable)
@@ -470,10 +471,11 @@ class TuiApp(App):
         if has_tools:
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value
+            new_val = current_val if any(v == current_val for _, v in options) else running_names[0]
             messenger_select.set_options(options)
-            messenger_select.value = (
-                current_val if any(v == current_val for _, v in options) else running_names[0]
-            )
+            messenger_select.value = new_val
+            if new_val != self._watched_tool or self._stop_log_watch.is_set():
+                self._start_log_watcher(new_val)
 
 
     def _commands_for_tool(self, tool_name: str) -> list[dict]:
@@ -580,6 +582,7 @@ class TuiApp(App):
         self.notify(text, timeout=5)
 
     def _start_log_watcher(self, name: str) -> None:
+        self._watched_tool = name
         self._stop_log_watch.set()
         self._stop_log_watch = threading.Event()
         stop = self._stop_log_watch
@@ -617,7 +620,8 @@ class TuiApp(App):
             mc.on_event = self._make_event_callback() if n == name else None
         self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
         self._refresh_messenger_commands(name)
-        self._start_log_watcher(name)
+        if name != self._watched_tool:
+            self._start_log_watcher(name)
 
     @on(Select.Changed, "#messenger-cmd")
     def on_messenger_cmd_changed(self, event: Select.Changed) -> None:
