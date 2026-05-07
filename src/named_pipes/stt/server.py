@@ -54,7 +54,7 @@ class STTServer(ToolServer):
     def __init__(self, config: STTConfig = STTConfig()):
         super().__init__(
             config.name,
-            description="Real-time speech-to-text server over a named pipe.",
+            description="🎙️ Real-time speech-to-text server over a named pipe.",
         )
         self.set_state(STTState.LOADING)
         self._stop_event = threading.Event()

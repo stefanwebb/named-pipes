@@ -7,6 +7,7 @@ class ArgSpec(BaseModel):
     description: str
     type: str = "str"
     required: bool = True
+    default: str | None = None
 
 
 class CommandSpec(BaseModel):

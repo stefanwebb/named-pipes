@@ -12,6 +12,7 @@ CHAT = Interface(
                     name="messages",
                     description='List of {"role": ..., "content": ...} message dicts.',
                     type="list",
+                    default='[{"role":"user", "content":"Hello!"}]',
                 )
             ],
         ),
@@ -23,6 +24,7 @@ CHAT = Interface(
                     name="messages",
                     description='List of {"role": ..., "content": ...} message dicts.',
                     type="list",
+                    default='[{"role":"user", "content":"Hello!"}]',
                 )
             ],
         ),

@@ -314,6 +314,7 @@ class TuiApp(App):
         self._stop_polling = threading.Event()
         self._active_messenger_tool: str | None = None
         self._interfaces: dict[str, dict] = {}
+        self._arg_cache: dict[str, dict[str, dict[str, str]]] = {}
 
         for tid in self._TABLE_IDS:
             table = self.query_one(f"#{tid}", _ToolsTable)
@@ -457,19 +458,37 @@ class TuiApp(App):
         cmd_select.set_options(options)
         cmd_select.value = current if any(v == current for _, v in options) else options[0][1]
 
+    def _save_current_args(self) -> None:
+        tool = self._active_messenger_tool
+        cmd_select = self.query_one("#messenger-cmd", Select)
+        cmd = str(cmd_select.value) if cmd_select.value is not Select.BLANK else None
+        if not tool or not cmd:
+            return
+        cache = self._arg_cache.setdefault(tool, {}).setdefault(cmd, {})
+        for inp in self.query_one("#messenger-args", Vertical).query(Input):
+            arg_name = inp.id.removeprefix("messenger-arg-")
+            cache[arg_name] = inp.value
+
     def _refresh_messenger_args(self, tool_name: str, cmd_name: str) -> None:
         container = self.query_one("#messenger-args", Vertical)
         container.remove_children()
         spec = self._command_spec(tool_name, cmd_name)
         if not spec:
             return
+        cached = self._arg_cache.get(tool_name, {}).get(cmd_name, {})
         for arg in spec.get("args", []):
+            arg_name = arg["name"]
+            if arg_name in cached:
+                initial = cached[arg_name]
+            else:
+                initial = arg.get("default") or ""
             container.mount(
                 Horizontal(
-                    Label(f"{arg['name']}:"),
+                    Label(f"{arg_name}:"),
                     Input(
+                        value=initial,
                         placeholder=arg.get("description", ""),
-                        id=f"messenger-arg-{arg['name']}",
+                        id=f"messenger-arg-{arg_name}",
                     ),
                     classes="field-row",
                 )
@@ -531,6 +550,7 @@ class TuiApp(App):
 
     @on(Select.Changed, "#messenger-tool")
     def on_messenger_tool_changed(self, event: Select.Changed) -> None:
+        self._save_current_args()
         name = str(event.value)
         self._active_messenger_tool = name
         for n, mc in self._managed_clients.items():
@@ -546,12 +566,14 @@ class TuiApp(App):
 
     @on(Select.Changed, "#messenger-cmd")
     def on_messenger_cmd_changed(self, event: Select.Changed) -> None:
+        self._save_current_args()
         tool = self._active_messenger_tool
         if tool:
             self._refresh_messenger_args(tool, str(event.value))
 
     @on(Button.Pressed, "#messenger-send")
     def on_messenger_send(self) -> None:
+        self._save_current_args()
         tool = str(self.query_one("#messenger-tool", Select).value)
         cmd = str(self.query_one("#messenger-cmd", Select).value)
         mc = self._managed_clients.get(tool)

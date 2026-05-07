@@ -13,7 +13,7 @@ BASE = Interface(
         CommandSpec(
             name="get_interface",
             description="Request the full Interface definition for a named interface the server implements.",
-            args=[ArgSpec(name="name", description="Interface name to retrieve.")],
+            args=[ArgSpec(name="name", description="Interface name to retrieve.", required=False, default="base")],
         ),
         CommandSpec(name="stop", description="Shut the server down gracefully."),
     ],

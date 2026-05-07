@@ -89,7 +89,7 @@ class TTSServer(ToolServer):
     def __init__(self, config: TTSConfig = TTSConfig()):
         super().__init__(
             config.name,
-            description="Real-time text-to-speech server over a named pipe.",
+            description="🔊 Real-time text-to-speech server over a named pipe.",
         )
         self._voice = config.voice
         self._sample_rate = config.sample_rate
