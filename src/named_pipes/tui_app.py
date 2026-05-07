@@ -64,10 +64,14 @@ class _ManagedClient:
     def __init__(self, name: str):
         self.name = name
         self.description: str = ""
+        self.interfaces: list[str] = []
         self.on_event: callable | None = None
+        self.on_interface_def: callable | None = None
         self._client = ToolClient(name)
         self._pong_event = threading.Event()
         self._state_val: str = "unknown"
+        self._discovering = True
+        self._pending_ifaces = 0
 
         @self._client.on("pong")
         def _(msg):
@@ -85,14 +89,39 @@ class _ManagedClient:
         def _(msg):
             self.description = msg.get("description") or ""
 
+        @self._client.on("interfaces")
+        def _(msg):
+            self.interfaces = msg.get("interfaces", [])
+            self._pending_ifaces = len(self.interfaces)
+            if self._pending_ifaces == 0:
+                self._discovering = False
+            for iface_name in self.interfaces:
+                self._client.send_command("get_interface", name=iface_name)
+
+        @self._client.on("interface")
+        def _(msg):
+            self._pending_ifaces = max(0, self._pending_ifaces - 1)
+            if self._pending_ifaces == 0:
+                self._discovering = False
+            defn = msg.get("interface")
+            iface_name = defn.get("name") if isinstance(defn, dict) else None
+            if iface_name and defn:
+                cb = self.on_interface_def
+                if cb is not None:
+                    cb(iface_name, defn)
+
         # Patch msg_handler_fn to forward all non-internal events to on_event
         _orig = self._client.__class__.msg_handler_fn
         _mc = self
 
         def _patched(client_self, msg, pid):
+            was_discovering = _mc._discovering
             _orig(client_self, msg, pid)
             cb = _mc.on_event
-            if cb is not None and msg.get("event") not in ("subscribed",):
+            event = msg.get("event")
+            if cb is not None and event not in ("subscribed",):
+                if event == "interface" and was_discovering:
+                    return
                 cb(msg)
 
         self._client.msg_handler_fn = types.MethodType(_patched, self._client)
@@ -101,6 +130,7 @@ class _ManagedClient:
         self._client.subscribe()
         self._client.send_command("get_description")
         self._client.send_command("get_state")
+        self._client.send_command("list_interfaces")
 
     def poll(self) -> tuple[bool, str]:
         """Send ping; return (healthy, state). State is maintained via events."""
@@ -167,6 +197,9 @@ class TuiApp(App):
         padding: 1;
         margin: 1;
         overflow-y: auto;
+    }
+    #messenger-args {
+        height: auto;
     }
     """
 
@@ -255,11 +288,8 @@ class TuiApp(App):
                                     id="messenger-tool",
                                 )
                             with Horizontal(classes="field-row"):
-                                yield Label("health:")
-                                yield Label("—", id="messenger-health")
-                            with Horizontal(classes="field-row"):
                                 yield Label("state:")
-                                yield Label("—", id="messenger-state")
+                                yield Label("—", id="messenger-health")
                             with Horizontal(classes="field-row"):
                                 yield Label("command:")
                                 yield Select(
@@ -267,6 +297,8 @@ class TuiApp(App):
                                     allow_blank=False,
                                     id="messenger-cmd",
                                 )
+                            with Vertical(id="messenger-args"):
+                                pass
                             yield Button("Send", id="messenger-send", variant="primary")
                     with Vertical(classes="system-col") as messenger_right:
                         messenger_right.border_title = "Tools"
@@ -281,6 +313,7 @@ class TuiApp(App):
         self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
         self._active_messenger_tool: str | None = None
+        self._interfaces: dict[str, dict] = {}
 
         for tid in self._TABLE_IDS:
             table = self.query_one(f"#{tid}", _ToolsTable)
@@ -329,6 +362,7 @@ class TuiApp(App):
         for name in connected_names - set(self._managed_clients):
             try:
                 mc = _ManagedClient(name)
+                mc.on_interface_def = self._on_interface_def
                 if name == self._active_messenger_tool:
                     mc.on_event = self._make_event_callback()
                 self._managed_clients[name] = mc
@@ -361,7 +395,7 @@ class TuiApp(App):
             rows &= new_names
 
             for name, healthy, state, description in statuses:
-                if not healthy:
+                if not healthy or state == "error":
                     health = Text("●", style="red bold")
                 elif state == "idle":
                     health = Text("●", style="grey50 bold")
@@ -395,18 +429,61 @@ class TuiApp(App):
         status_map = {name: (healthy, state) for name, healthy, state, _ in statuses}
         self._update_messenger_status(str(messenger_select.value), status_map)
 
+    def _commands_for_tool(self, tool_name: str) -> list[dict]:
+        mc = self._managed_clients.get(tool_name)
+        if mc is None:
+            return []
+        commands = []
+        for iface_name in mc.interfaces:
+            iface_def = self._interfaces.get(iface_name)
+            if iface_def:
+                commands.extend(iface_def.get("commands", []))
+        return commands
+
+    def _command_spec(self, tool_name: str, cmd_name: str) -> dict | None:
+        for cmd in self._commands_for_tool(tool_name):
+            if cmd["name"] == cmd_name:
+                return cmd
+        return None
+
+    def _refresh_messenger_commands(self, tool_name: str) -> None:
+        commands = self._commands_for_tool(tool_name)
+        cmd_select = self.query_one("#messenger-cmd", Select)
+        if commands:
+            options = [(cmd["name"], cmd["name"]) for cmd in commands]
+        else:
+            options = [(c, c) for c in _MESSENGER_COMMANDS]
+        current = str(cmd_select.value)
+        cmd_select.set_options(options)
+        cmd_select.value = current if any(v == current for _, v in options) else options[0][1]
+
+    def _refresh_messenger_args(self, tool_name: str, cmd_name: str) -> None:
+        container = self.query_one("#messenger-args", Vertical)
+        container.remove_children()
+        spec = self._command_spec(tool_name, cmd_name)
+        if not spec:
+            return
+        for arg in spec.get("args", []):
+            container.mount(
+                Horizontal(
+                    Label(f"{arg['name']}:"),
+                    Input(
+                        placeholder=arg.get("description", ""),
+                        id=f"messenger-arg-{arg['name']}",
+                    ),
+                    classes="field-row",
+                )
+            )
+
     def _update_messenger_status(self, name: str, status_map: dict[str, tuple[bool, str]]) -> None:
         healthy, state = status_map.get(name, (False, "—"))
-        health_label = self.query_one("#messenger-health", Label)
-        state_label = self.query_one("#messenger-state", Label)
-        if not healthy:
-            health_text = Text("● unhealthy", style="red bold")
+        if not healthy or state == "error":
+            text = Text(f"● {state}", style="red bold")
         elif state == "idle":
-            health_text = Text("● idle", style="grey50 bold")
+            text = Text(f"● {state}", style="grey50 bold")
         else:
-            health_text = Text("● healthy", style="green bold")
-        health_label.update(health_text)
-        state_label.update(state)
+            text = Text(f"● {state}", style="green bold")
+        self.query_one("#messenger-health", Label).update(text)
 
     @on(_ToolsTable.RowClicked)
     def on_tools_row_clicked(self, event: _ToolsTable.RowClicked) -> None:
@@ -423,6 +500,22 @@ class TuiApp(App):
             self.call_from_thread(self._on_tool_event, msg)
         return cb
 
+    def _on_interface_def(self, name: str, defn: dict) -> None:
+        if name not in self._interfaces:
+            self._interfaces[name] = defn
+        elif defn != self._interfaces[name]:
+            self.call_from_thread(
+                self.notify,
+                f"Interface '{name}' definition mismatch between tools",
+                severity="warning",
+            )
+            return
+        active = self._active_messenger_tool
+        if active and active in self._managed_clients:
+            mc = self._managed_clients[active]
+            if name in mc.interfaces:
+                self.call_from_thread(self._refresh_messenger_commands, active)
+
     def _on_tool_event(self, msg: dict) -> None:
         event = msg.get("event", "unknown")
         if event == "pong":
@@ -431,7 +524,7 @@ class TuiApp(App):
             tool = self._active_messenger_tool
             if tool and tool in self._managed_clients:
                 mc = self._managed_clients[tool]
-                self.query_one("#messenger-state", Label).update(mc._state_val)
+                self._update_messenger_status(tool, {tool: (True, mc._state_val)})
         data = {k: v for k, v in msg.items() if k != "event"}
         text = f"{event}: {json.dumps(data)}" if data else event
         self.notify(text, timeout=5)
@@ -449,6 +542,13 @@ class TuiApp(App):
             status_map = {}
         self._update_messenger_status(name, status_map)
         self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
+        self._refresh_messenger_commands(name)
+
+    @on(Select.Changed, "#messenger-cmd")
+    def on_messenger_cmd_changed(self, event: Select.Changed) -> None:
+        tool = self._active_messenger_tool
+        if tool:
+            self._refresh_messenger_args(tool, str(event.value))
 
     @on(Button.Pressed, "#messenger-send")
     def on_messenger_send(self) -> None:
@@ -458,7 +558,22 @@ class TuiApp(App):
         if mc is None:
             self.notify(f"Tool '{tool}' not connected", severity="error")
             return
-        mc.send_command(cmd)
+        spec = self._command_spec(tool, cmd)
+        arg_types = {arg["name"]: arg.get("type", "str") for arg in (spec.get("args", []) if spec else [])}
+        kwargs = {}
+        for inp in self.query_one("#messenger-args", Vertical).query(Input):
+            if not inp.value:
+                continue
+            arg_name = inp.id.removeprefix("messenger-arg-")
+            if arg_types.get(arg_name, "str") != "str":
+                try:
+                    kwargs[arg_name] = json.loads(inp.value)
+                except json.JSONDecodeError:
+                    self.notify(f"Argument '{arg_name}' must be valid JSON", severity="error")
+                    return
+            else:
+                kwargs[arg_name] = inp.value
+        mc.send_command(cmd, **kwargs)
 
     @on(Select.Changed, "#chat-backend")
     def on_chat_backend_changed(self, event: Select.Changed) -> None:

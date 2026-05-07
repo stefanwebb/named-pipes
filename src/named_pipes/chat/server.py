@@ -115,6 +115,20 @@ class ChatServer(ToolServer):
         return super()._list_interfaces() + ["chat"]
 
     # -----------------------------------------------------------------------
+    # Verbose logging
+    # -----------------------------------------------------------------------
+
+    def msg_handler_fn(self, msg: dict, pid: int | None):
+        if self._verbose:
+            print(f">> {json.dumps(msg)}", flush=True)
+        super().msg_handler_fn(msg, pid)
+
+    def send_event(self, event: str, pid: int | None = None, **kwargs):
+        if self._verbose:
+            print(f"<< {json.dumps({'event': event, **kwargs})}", flush=True)
+        super().send_event(event, pid, **kwargs)
+
+    # -----------------------------------------------------------------------
     # Command handlers
     # -----------------------------------------------------------------------
     def _handle_chat(self, msg: dict, pid: int | None):
@@ -136,8 +150,6 @@ class ChatServer(ToolServer):
         except Exception:
             self.set_state(ChatState.ERROR)
             raise
-        if self._verbose:
-            print(reply, flush=True)
         self.send_event("reply", pid, text=reply)
         self.set_state(ChatState.IDLE)
 
@@ -147,17 +159,11 @@ class ChatServer(ToolServer):
 
     def _send_chunk(self, text: str, pid: int | None):
         """Send one streaming chunk to *pid*."""
-        if self._verbose:
-            print(text, end="", flush=True)
-        self.send_message(
-            json.dumps({"event": "token", "text": text, "done": False}), pid
-        )
+        self.send_event("token", pid, text=text, done=False)
 
     def _send_stream_done(self, pid: int | None):
         """Send the end-of-stream sentinel to *pid*."""
-        if self._verbose:
-            print(flush=True)
-        self.send_message(json.dumps({"event": "token", "text": "", "done": True}), pid)
+        self.send_event("token", pid, text="", done=True)
 
     # -----------------------------------------------------------------------
     # Backend initialisation
