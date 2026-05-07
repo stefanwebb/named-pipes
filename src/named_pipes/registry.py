@@ -15,6 +15,8 @@ with, and the backend(s) each is compatible with.
 from dataclasses import dataclass, field
 from enum import Enum
 
+from named_pipes.interfaces import BASE, CHAT, TTS, STT, Interface
+
 
 class ServerType(str, Enum):
     CHAT = "chat"
@@ -107,6 +109,11 @@ REGISTRY: list[ModelEntry] = [
         description="Voxtral Mini 4B Realtime (6-bit) — default STT model",
     ),
 ]
+
+
+INTERFACES: dict[str, Interface] = {
+    iface.name: iface for iface in [BASE, CHAT, TTS, STT]
+}
 
 
 def models_for(server: ServerType) -> list[ModelEntry]:
