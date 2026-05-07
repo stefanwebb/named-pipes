@@ -210,11 +210,7 @@ class TuiApp(App):
     .field-row Input, .field-row Select, .field-row AutoTextArea {
         width: 1fr;
     }
-    #backend-kwargs {
-        height: 10;
-        width: 1fr;
-    }
-    .system-col {
+.system-col {
         border: round $primary;
         padding: 1;
         margin: 1;
@@ -227,30 +223,45 @@ class TuiApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("1", "switch_tab('tab-system')", "System"),
-        Binding("2", "switch_tab('tab-launcher')", "Launcher"),
-        Binding("3", "switch_tab('tab-messenger')", "Messenger"),
+        Binding("1", "switch_tab('tab-tools')", "Tools"),
+        Binding("2", "switch_tab('tab-launcher')", "Launch"),
+        Binding("3", "switch_tab('tab-info')", "Info"),
     ]
 
     def compose(self) -> ComposeResult:
         info = get_system_info()
         yield Header()
-        with TabbedContent(initial="tab-system", id="outer-tabs"):
-            with TabPane("System", id="tab-system"):
+        with TabbedContent(initial="tab-tools", id="outer-tabs"):
+            with TabPane("Tools", id="tab-tools"):
                 with Horizontal():
-                    with Vertical(classes="system-col") as left_col:
-                        left_col.border_title = "Info"
-                        yield Label("[bold]Hardware[/bold]", markup=True)
-                        yield Rule()
-                        yield Label(info.hardware_str())
-                        yield Label("")
-                        yield Label("[bold]Libraries[/bold]", markup=True)
-                        yield Rule()
-                        yield Label(info.libraries_str())
-                    with Vertical(classes="system-col") as right_col:
-                        right_col.border_title = "Tools"
+                    with Vertical(classes="system-col") as tools_left:
+                        tools_left.border_title = "Commands"
+                        yield Label("No tools running.", id="messenger-empty")
+                        with Vertical(id="messenger-controls"):
+                            with Horizontal(classes="field-row"):
+                                yield Label("tool:")
+                                yield Select(
+                                    [("", "")],
+                                    allow_blank=False,
+                                    id="messenger-tool",
+                                )
+                            with Horizontal(classes="field-row"):
+                                yield Label("state:")
+                                yield Label("—", id="messenger-health")
+                            with Horizontal(classes="field-row"):
+                                yield Label("command:")
+                                yield Select(
+                                    [(c, c) for c in _MESSENGER_COMMANDS],
+                                    allow_blank=False,
+                                    id="messenger-cmd",
+                                )
+                            with Vertical(id="messenger-args"):
+                                pass
+                            yield Button("Send", id="messenger-send", variant="primary")
+                    with Vertical(classes="system-col") as tools_right:
+                        tools_right.border_title = "Tools"
                         yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
-            with TabPane("Launcher", id="tab-launcher"):
+            with TabPane("Launch", id="tab-launcher"):
                 with Horizontal():
                     with Vertical(classes="system-col") as launcher_left:
                         launcher_left.border_title = "Launch"
@@ -281,7 +292,7 @@ class TuiApp(App):
                                         yield _Input(value="LLM chat server over a named pipe.", id="chat-description")
                                     with Horizontal(classes="field-row"):
                                         yield Label("backend_kwargs:")
-                                        yield TextArea(
+                                        yield AutoTextArea(
                                             json.dumps({"max_new_tokens": 256, "do_sample": False}, indent=2),
                                             id="backend-kwargs",
                                         )
@@ -296,38 +307,19 @@ class TuiApp(App):
                     with Vertical(classes="system-col") as launcher_right:
                         launcher_right.border_title = "Tools"
                         yield _ToolsTable(id="tools-table-launcher", cursor_type="row", show_cursor=False)
-            with TabPane("Messenger", id="tab-messenger"):
-                with Horizontal():
-                    with Vertical(classes="system-col") as messenger_left:
-                        messenger_left.border_title = "Messenger"
-                        yield Label("No tools running.", id="messenger-empty")
-                        with Vertical(id="messenger-controls"):
-                            with Horizontal(classes="field-row"):
-                                yield Label("tool:")
-                                yield Select(
-                                    [("", "")],
-                                    allow_blank=False,
-                                    id="messenger-tool",
-                                )
-                            with Horizontal(classes="field-row"):
-                                yield Label("state:")
-                                yield Label("—", id="messenger-health")
-                            with Horizontal(classes="field-row"):
-                                yield Label("command:")
-                                yield Select(
-                                    [(c, c) for c in _MESSENGER_COMMANDS],
-                                    allow_blank=False,
-                                    id="messenger-cmd",
-                                )
-                            with Vertical(id="messenger-args"):
-                                pass
-                            yield Button("Send", id="messenger-send", variant="primary")
-                    with Vertical(classes="system-col") as messenger_right:
-                        messenger_right.border_title = "Tools"
-                        yield _ToolsTable(id="tools-table-messenger", cursor_type="row", show_cursor=False)
+            with TabPane("Info", id="tab-info"):
+                with Vertical(classes="system-col") as info_col:
+                    info_col.border_title = "Info"
+                    yield Label("[bold]Hardware[/bold]", markup=True)
+                    yield Rule()
+                    yield Label(info.hardware_str())
+                    yield Label("")
+                    yield Label("[bold]Libraries[/bold]", markup=True)
+                    yield Rule()
+                    yield Label(info.libraries_str())
         yield Footer()
 
-    _TABLE_IDS = ["tools-table", "tools-table-launcher", "tools-table-messenger"]
+    _TABLE_IDS = ["tools-table", "tools-table-launcher"]
 
     def on_mount(self) -> None:
         self._chat_backend: Backend = Backend.TRANSFORMERS
@@ -531,7 +523,7 @@ class TuiApp(App):
         messenger_select = self.query_one("#messenger-tool", Select)
         if name in self._managed_clients:
             messenger_select.value = name
-        self.query_one("#outer-tabs", TabbedContent).active = "tab-messenger"
+        self.query_one("#outer-tabs", TabbedContent).active = "tab-tools"
         for table in self.query(_ToolsTable):
             table.show_cursor = False
 
@@ -659,7 +651,7 @@ class TuiApp(App):
         verbose = self.query_one("#chat-verbose", Switch).value
 
         try:
-            backend_kwargs = json.loads(self.query_one("#backend-kwargs", TextArea).text)
+            backend_kwargs = json.loads(self.query_one("#backend-kwargs", AutoTextArea).text)
         except json.JSONDecodeError:
             self.notify("backend_kwargs is not valid JSON", severity="error")
             return
