@@ -4,13 +4,13 @@ TTS = Interface(
     name="tts",
     description="Text-to-speech — streams text tokens to an audio backend over a named pipe.",
     commands=[
+        CommandSpec(name="flush", description="Flush any remaining buffered text to the speech queue."),
+        CommandSpec(name="is_speaking", description="Request the current speaking status."),
         CommandSpec(
             name="text",
             description="Append a text token to the speech buffer.",
             args=[ArgSpec(name="data", description="Text token to enqueue for speech.")],
         ),
-        CommandSpec(name="flush", description="Flush any remaining buffered text to the speech queue."),
-        CommandSpec(name="is_speaking", description="Request the current speaking status."),
     ],
     events=[
         EventSpec(
