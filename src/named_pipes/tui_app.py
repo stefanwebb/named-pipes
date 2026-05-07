@@ -35,6 +35,13 @@ TOOL_POLL_INTERVAL = 1.0
 _MESSENGER_COMMANDS = ["get_state", "get_description", "get_help", "get_config", "list_interfaces", "get_interface", "stop"]
 
 
+class _Input(Input):
+    BINDINGS = [Binding("escape", "dismiss_input", "Dismiss textbox", key_display="esc")]
+
+    def action_dismiss_input(self) -> None:
+        self.blur()
+
+
 class _ToolsTable(DataTable):
     class RowClicked(Message):
         def __init__(self, row_key) -> None:
@@ -237,7 +244,7 @@ class TuiApp(App):
                                 with VerticalScroll():
                                     with Horizontal(classes="field-row"):
                                         yield Label("name:")
-                                        yield Input(value="chat", id="chat-name")
+                                        yield _Input(value="chat", id="chat-name")
                                     with Horizontal(classes="field-row"):
                                         yield Label("model:")
                                         yield Select(
@@ -256,7 +263,7 @@ class TuiApp(App):
                                         )
                                     with Horizontal(classes="field-row"):
                                         yield Label("description:")
-                                        yield Input(value="LLM chat server over a named pipe.", id="chat-description")
+                                        yield _Input(value="LLM chat server over a named pipe.", id="chat-description")
                                     with Horizontal(classes="field-row"):
                                         yield Label("backend_kwargs:")
                                         yield TextArea(
@@ -451,9 +458,9 @@ class TuiApp(App):
         commands = self._commands_for_tool(tool_name)
         cmd_select = self.query_one("#messenger-cmd", Select)
         if commands:
-            options = [(cmd["name"], cmd["name"]) for cmd in commands]
+            options = sorted([(cmd["name"], cmd["name"]) for cmd in commands], key=lambda x: x[0])
         else:
-            options = [(c, c) for c in _MESSENGER_COMMANDS]
+            options = [(c, c) for c in sorted(_MESSENGER_COMMANDS)]
         current = str(cmd_select.value)
         cmd_select.set_options(options)
         cmd_select.value = current if any(v == current for _, v in options) else options[0][1]
@@ -485,7 +492,7 @@ class TuiApp(App):
             container.mount(
                 Horizontal(
                     Label(f"{arg_name}:"),
-                    Input(
+                    _Input(
                         value=initial,
                         placeholder=arg.get("description", ""),
                         id=f"messenger-arg-{arg_name}",
