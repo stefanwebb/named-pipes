@@ -67,7 +67,7 @@ class TTSConfig(BaseModel):
     sample_rate: int = SAMPLE_RATE
     blocksize: int = BLOCKSIZE
     model_id: str = MODEL_ID
-    verbose: bool = False
+    verbose: bool = True
 
 
 # Sentence boundary: . ! ? followed by whitespace or end-of-string.

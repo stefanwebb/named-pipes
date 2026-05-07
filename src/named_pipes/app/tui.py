@@ -14,6 +14,8 @@ import types
 
 from rich.text import Text
 from named_pipes.chat.server import Backend, ChatConfig
+from named_pipes.tts.server import TTSConfig
+from named_pipes.stt.server import STTConfig
 from named_pipes.registry import Backend as RegBackend, ServerType, default_for_backend, models_for_backend
 from named_pipes.system import get_system_info, _tool_name_from_path
 from named_pipes.tools.client import ToolClient
@@ -318,9 +320,53 @@ class TuiApp(App):
                                         yield Switch(value=ChatConfig.model_fields["verbose"].default, id="chat-verbose")
                                     yield Button("Launch", id="chat-launch", variant="success")
                             with TabPane("Text-to-speech", id="launcher-tts"):
-                                yield Label("Text-to-speech content goes here.")
+                                with VerticalScroll():
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("name:")
+                                        yield _Input(value=TTSConfig.model_fields["name"].default, id="tts-name")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("description:")
+                                        yield _Input(value=TTSConfig.model_fields["description"].default, id="tts-description")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("model_id:")
+                                        yield _Input(value=TTSConfig.model_fields["model_id"].default, id="tts-model-id")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("voice:")
+                                        yield _Input(value=TTSConfig.model_fields["voice"].default, id="tts-voice")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("sample_rate:")
+                                        yield _Input(value=str(TTSConfig.model_fields["sample_rate"].default), id="tts-sample-rate")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("blocksize:")
+                                        yield _Input(value=str(TTSConfig.model_fields["blocksize"].default), id="tts-blocksize")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("verbose:")
+                                        yield Switch(value=TTSConfig.model_fields["verbose"].default, id="tts-verbose")
+                                    yield Button("Launch", id="tts-launch", variant="success")
                             with TabPane("Speech-to-text", id="launcher-stt"):
-                                yield Label("Speech-to-text content goes here.")
+                                with VerticalScroll():
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("name:")
+                                        yield _Input(value=STTConfig.model_fields["name"].default, id="stt-name")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("description:")
+                                        yield _Input(value=STTConfig.model_fields["description"].default, id="stt-description")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("model_path:")
+                                        yield _Input(value=STTConfig.model_fields["model_path"].default, id="stt-model-path")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("temperature:")
+                                        yield _Input(value=str(STTConfig.model_fields["temperature"].default), id="stt-temperature")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("vad_onset:")
+                                        yield _Input(value=str(STTConfig.model_fields["vad_onset"].default), id="stt-vad-onset")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("vad_offset:")
+                                        yield _Input(value=str(STTConfig.model_fields["vad_offset"].default), id="stt-vad-offset")
+                                    with Horizontal(classes="field-row"):
+                                        yield Label("verbose:")
+                                        yield Switch(value=STTConfig.model_fields["verbose"].default, id="stt-verbose")
+                                    yield Button("Launch", id="stt-launch", variant="success")
                     with Vertical(classes="right-split"):
                         with Vertical(classes="system-col") as launcher_right:
                             launcher_right.border_title = "Tools"
@@ -720,6 +766,75 @@ class TuiApp(App):
             stderr=log,
         )
         self.notify(f"Launched chat server '{name}' — log: {log_path}")
+
+    @on(Button.Pressed, "#tts-launch")
+    def on_tts_launch(self) -> None:
+        name = self.query_one("#tts-name", Input).value.strip()
+        pipe_path = f"/tmp/tool-{name}"
+        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
+            self.notify(f"Tool '{name}' is already running", severity="error")
+            return
+
+        try:
+            sample_rate = int(self.query_one("#tts-sample-rate", Input).value.strip())
+            blocksize = int(self.query_one("#tts-blocksize", Input).value.strip())
+        except ValueError:
+            self.notify("sample_rate and blocksize must be integers", severity="error")
+            return
+
+        config = {
+            "name": name,
+            "description": self.query_one("#tts-description", Input).value.strip(),
+            "model_id": self.query_one("#tts-model-id", Input).value.strip(),
+            "voice": self.query_one("#tts-voice", Input).value.strip(),
+            "sample_rate": sample_rate,
+            "blocksize": blocksize,
+            "verbose": self.query_one("#tts-verbose", Switch).value,
+        }
+        log_path = f"/tmp/tool-{name}.log"
+        log = open(log_path, "w")
+        subprocess.Popen(
+            [sys.executable, "-m", "named_pipes.tts.launch", json.dumps(config)],
+            start_new_session=True,
+            stdout=log,
+            stderr=log,
+        )
+        self.notify(f"Launched TTS server '{name}' — log: {log_path}")
+
+    @on(Button.Pressed, "#stt-launch")
+    def on_stt_launch(self) -> None:
+        name = self.query_one("#stt-name", Input).value.strip()
+        pipe_path = f"/tmp/tool-{name}"
+        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
+            self.notify(f"Tool '{name}' is already running", severity="error")
+            return
+
+        try:
+            temperature = float(self.query_one("#stt-temperature", Input).value.strip())
+            vad_onset = int(self.query_one("#stt-vad-onset", Input).value.strip())
+            vad_offset = int(self.query_one("#stt-vad-offset", Input).value.strip())
+        except ValueError:
+            self.notify("temperature must be a float; vad_onset and vad_offset must be integers", severity="error")
+            return
+
+        config = {
+            "name": name,
+            "description": self.query_one("#stt-description", Input).value.strip(),
+            "model_path": self.query_one("#stt-model-path", Input).value.strip(),
+            "temperature": temperature,
+            "vad_onset": vad_onset,
+            "vad_offset": vad_offset,
+            "verbose": self.query_one("#stt-verbose", Switch).value,
+        }
+        log_path = f"/tmp/tool-{name}.log"
+        log = open(log_path, "w")
+        subprocess.Popen(
+            [sys.executable, "-m", "named_pipes.stt.launch", json.dumps(config)],
+            start_new_session=True,
+            stdout=log,
+            stderr=log,
+        )
+        self.notify(f"Launched STT server '{name}' — log: {log_path}")
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one("#outer-tabs", TabbedContent).active = tab_id

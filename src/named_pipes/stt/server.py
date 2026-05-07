@@ -41,7 +41,7 @@ class STTConfig(BaseModel):
     temperature: float = 0.0
     vad_onset: int = 2
     vad_offset: int = 32
-    verbose: bool = False
+    verbose: bool = True
 
 
 class STTServer(ToolServer):
