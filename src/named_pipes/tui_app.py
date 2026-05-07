@@ -32,7 +32,7 @@ from textual.message import Message
 
 TOOL_POLL_INTERVAL = 1.0
 
-_MESSENGER_COMMANDS = ["get_state", "get_description", "get_help", "get_config", "stop"]
+_MESSENGER_COMMANDS = ["get_state", "get_description", "get_help", "get_config", "list_interfaces", "get_interface", "stop"]
 
 
 class _ToolsTable(DataTable):
@@ -245,28 +245,29 @@ class TuiApp(App):
                 with Horizontal():
                     with Vertical(classes="system-col") as messenger_left:
                         messenger_left.border_title = "Messenger"
-                        with Horizontal(classes="field-row"):
-                            yield Label("tool:")
-                            yield Select(
-                                [("(no tools running)", "")],
-                                allow_blank=False,
-                                disabled=True,
-                                id="messenger-tool",
-                            )
-                        with Horizontal(classes="field-row"):
-                            yield Label("health:")
-                            yield Label("—", id="messenger-health")
-                        with Horizontal(classes="field-row"):
-                            yield Label("state:")
-                            yield Label("—", id="messenger-state")
-                        with Horizontal(classes="field-row"):
-                            yield Label("command:")
-                            yield Select(
-                                [(c, c) for c in _MESSENGER_COMMANDS],
-                                allow_blank=False,
-                                id="messenger-cmd",
-                            )
-                        yield Button("Send", id="messenger-send", variant="primary", disabled=True)
+                        yield Label("No tools running.", id="messenger-empty")
+                        with Vertical(id="messenger-controls"):
+                            with Horizontal(classes="field-row"):
+                                yield Label("tool:")
+                                yield Select(
+                                    [("", "")],
+                                    allow_blank=False,
+                                    id="messenger-tool",
+                                )
+                            with Horizontal(classes="field-row"):
+                                yield Label("health:")
+                                yield Label("—", id="messenger-health")
+                            with Horizontal(classes="field-row"):
+                                yield Label("state:")
+                                yield Label("—", id="messenger-state")
+                            with Horizontal(classes="field-row"):
+                                yield Label("command:")
+                                yield Select(
+                                    [(c, c) for c in _MESSENGER_COMMANDS],
+                                    allow_blank=False,
+                                    id="messenger-cmd",
+                                )
+                            yield Button("Send", id="messenger-send", variant="primary")
                     with Vertical(classes="system-col") as messenger_right:
                         messenger_right.border_title = "Tools"
                         yield _ToolsTable(id="tools-table-messenger", cursor_type="row", show_cursor=False)
@@ -288,11 +289,15 @@ class TuiApp(App):
             table.add_column("State", key="state")
             table.add_column("Description", key="description")
 
+        self.query_one("#messenger-empty", Label).display = True
+        self.query_one("#messenger-controls", Vertical).display = False
+
         self.run_worker(self._poll_loop, thread=True)
 
     def on_unmount(self) -> None:
-        self._stop_polling.set()
-        for mc in self._managed_clients.values():
+        if hasattr(self, "_stop_polling"):
+            self._stop_polling.set()
+        for mc in getattr(self, "_managed_clients", {}).values():
             mc.close()
 
     def _poll_loop(self) -> None:
@@ -370,18 +375,22 @@ class TuiApp(App):
                     table.add_row(health, name, state, description, key=name)
                     rows.add(name)
 
+        has_any = bool(statuses)
+        for tid in self._TABLE_IDS:
+            self.query_one(f"#{tid}", _ToolsTable).display = has_any
+
         running_names = [name for name, healthy, _, _ in statuses if healthy]
         messenger_select = self.query_one("#messenger-tool", Select)
-        if running_names:
+        has_tools = bool(running_names)
+        self.query_one("#messenger-empty", Label).display = not has_tools
+        self.query_one("#messenger-controls", Vertical).display = has_tools
+        if has_tools:
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value
             messenger_select.set_options(options)
             messenger_select.value = (
                 current_val if any(v == current_val for _, v in options) else running_names[0]
             )
-            messenger_select.disabled = False
-        else:
-            messenger_select.disabled = True
 
         status_map = {name: (healthy, state) for name, healthy, state, _ in statuses}
         self._update_messenger_status(str(messenger_select.value), status_map)

@@ -16,6 +16,7 @@ import os
 from enum import Enum
 from pathlib import Path
 
+from named_pipes.registry import INTERFACES
 from named_pipes.text_named_pipe import TextNamedPipe, Role
 from named_pipes.utils import scan_pipes
 
@@ -142,6 +143,17 @@ class ToolServer(TextNamedPipe):
         @self.handler("list_interfaces")
         def _list_interfaces(msg, pid):
             self.send_event("interfaces", pid, interfaces=self._list_interfaces())
+
+        @self.handler("get_interface")
+        def _get_interface(msg, pid):
+            name = msg.get("name", "")
+            if name not in INTERFACES:
+                self.send_event("error", pid, message=f"unknown interface '{name}'")
+                return
+            if name not in self._list_interfaces():
+                self.send_event("error", pid, message=f"interface '{name}' not supported by this tool")
+                return
+            self.send_event("interface", pid, interface=INTERFACES[name].model_dump())
 
         @self.handler("stop")
         def _stop(msg, pid):
