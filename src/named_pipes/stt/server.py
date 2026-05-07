@@ -22,7 +22,7 @@ from enum import Enum
 from pydantic import BaseModel
 
 from named_pipes.stt.voxtral.stream import stream_transcribe
-from named_pipes.tool_server import ToolServer, ToolState
+from named_pipes.tools.server import ToolServer, ToolState
 
 
 class STTState(Enum):

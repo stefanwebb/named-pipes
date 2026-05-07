@@ -162,7 +162,7 @@ def _tool_name_from_path(path: str) -> str | None:
 
 
 def _fetch_description(name: str, timeout: float = 2.0) -> str | None:
-    from named_pipes.tool_client import ToolClient
+    from named_pipes.tools.client import ToolClient
 
     got = threading.Event()
     result: list[str | None] = [None]

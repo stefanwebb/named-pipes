@@ -14,7 +14,7 @@ import os
 import sys
 import threading
 
-from named_pipes.text_named_pipe import Role, TextNamedPipe
+from named_pipes.pipes.text import Role, TextNamedPipe
 from named_pipes.utils import get_version, scan_pipes
 
 

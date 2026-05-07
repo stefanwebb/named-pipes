@@ -11,7 +11,7 @@ LLM client: subscribes to the LLM server, demonstrates both streaming
 
 import threading
 
-from named_pipes.tool_client import ToolClient
+from named_pipes.tools.client import ToolClient
 
 STREAMING_QUERY = [{"role": "user", "content": "What is the capital of France?"}]
 BLOCKING_QUERY = [

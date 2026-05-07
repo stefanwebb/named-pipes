@@ -13,7 +13,7 @@ See named-pipe-tools.md for the full specification.
 import json
 import threading
 
-from named_pipes.text_named_pipe import TextNamedPipe, Role
+from named_pipes.pipes.text import TextNamedPipe, Role
 
 
 class ToolClient(TextNamedPipe):

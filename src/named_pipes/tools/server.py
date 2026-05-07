@@ -17,7 +17,7 @@ from enum import Enum
 from pathlib import Path
 
 from named_pipes.registry import INTERFACES
-from named_pipes.text_named_pipe import TextNamedPipe, Role
+from named_pipes.pipes.text import TextNamedPipe, Role
 from named_pipes.utils import scan_pipes
 
 

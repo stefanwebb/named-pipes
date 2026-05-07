@@ -13,7 +13,7 @@ import struct
 import threading
 from abc import ABC, abstractmethod
 
-from named_pipes.text_named_pipe import Role
+from named_pipes.pipes.text import Role
 from named_pipes.utils import ensure_pipe, remove_pipe
 
 

@@ -14,7 +14,7 @@ Requires the STT server to be running first:
 
 import threading
 
-from named_pipes.tool_client import ToolClient
+from named_pipes.tools.client import ToolClient
 
 
 class _STTClient(ToolClient):

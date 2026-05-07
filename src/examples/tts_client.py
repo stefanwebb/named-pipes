@@ -15,7 +15,7 @@ Requires both servers to be running before starting this client:
 
 import threading
 
-from named_pipes.tool_client import ToolClient
+from named_pipes.tools.client import ToolClient
 
 QUERY = [
     {

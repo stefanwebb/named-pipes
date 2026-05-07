@@ -7,11 +7,11 @@ https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
 """
 
-from named_pipes.data_named_pipe import DataNamedPipe
-from named_pipes.text_named_pipe import TextNamedPipe
-from named_pipes.text_named_pipe import Role
-from named_pipes.tool_client import ToolClient
-from named_pipes.tool_server import ToolServer
+from named_pipes.pipes.data import DataNamedPipe
+from named_pipes.pipes.text import TextNamedPipe
+from named_pipes.pipes.text import Role
+from named_pipes.tools.client import ToolClient
+from named_pipes.tools.server import ToolServer
 from named_pipes.utils import get_pids_for_pipe, get_version
 
 __all__ = [
