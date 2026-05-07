@@ -1,110 +1,116 @@
-# chat — LLM chat inference server
+# named_pipes.chat
 
-Serves streaming and blocking LLM chat inference over a named pipe using **Qwen3.5-0.8B** (HuggingFace Transformers backend by default).
+LLM chat inference server over named pipes. Accepts conversation messages from connected clients and streams or returns model-generated replies.
 
 Pipe: `/tmp/tool-chat`
 
-## Starting the server
+## Classes
 
-```bash
-conda activate named-pipes
-cpipe --serve chat
-```
+### `ChatServer`
 
-The server loads the model on startup (this takes a few seconds), then prints:
+`ToolServer` subclass. Implements the `CHAT` interface on top of the base `ToolServer` commands.
 
-```
-CHAT server listening on /tmp/tool-chat ...
-```
-
-## Commands
-
-### Built-in (all ToolServer instances support these)
+**Supported commands**
 
 | Command | Description |
 |---|---|
-| `ping` | Health check — responds with `pong` event |
-| `get_state` | Current server state (e.g. `running`) |
-| `get_description` | One-line description of the server |
-| `get_help` | Full help text (this file) |
-| `get_config` | Current server configuration |
-| `stop` | Shut the server down gracefully |
+| `chat` | Streaming inference — emits `token` events per token batch, then a `token` with `done: true` |
+| `chat_blocking` | Synchronous inference — emits a single `reply` event |
 
-### Chat commands
+The server enforces a state machine so only one inference runs at a time:
 
-#### `chat` — streaming inference
+```
+LOADING → IDLE → INFERRING → IDLE
+                           → ERROR
+```
 
-Sends tokens back as they are generated.
+Streaming inference runs in a dedicated thread to avoid blocking the listener loop.
+
+---
+
+### `ChatConfig`
+
+Pydantic model holding server configuration.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | `str` | — | Model name or HuggingFace path |
+| `backend` | `Backend` | `TRANSFORMERS` | Inference backend |
+| `max_new_tokens` | `int` | `512` | Generation token limit |
+| `temperature` | `float` | `1.0` | Sampling temperature |
+| `verbose` | `bool` | `False` | Log inference events to stdout |
+
+Additional kwargs are forwarded directly to the backend's generation call.
+
+---
+
+### `Backend`
+
+```python
+class Backend(Enum):
+    TRANSFORMERS = "transformers"
+    VLLM         = "vllm"
+    VLLM_MLX     = "vllm_mlx"
+    MLX_LM       = "mlx_lm"
+```
+
+Backend imports are deferred so unused backends don't need to be installed.
+
+---
+
+### `ChatState`
+
+```python
+class ChatState(Enum):
+    LOADING    = "loading"
+    IDLE       = "idle"
+    INFERRING  = "inferring"
+    ERROR      = "error"
+```
+
+## Backend Behaviour
+
+### `TRANSFORMERS`
+
+Uses `transformers.TextIteratorStreamer` in a separate thread — token events arrive incrementally without blocking the listener loop.
+
+### `VLLM` / `VLLM_MLX`
+
+Calls the vLLM engine and forwards `SamplingParams`. Returns the full response as a single `token` event followed by `done` (no per-token streaming).
+
+### `MLX_LM`
+
+Uses `mlx_lm.generate` with streaming on Apple Silicon.
+
+## Launching
+
+### From Python
+
+```python
+from named_pipes.chat import ChatServer, ChatConfig, Backend
+
+config = ChatConfig(model="Qwen/Qwen2.5-0.5B-Instruct", backend=Backend.TRANSFORMERS)
+server = ChatServer(config)
+server.start()  # blocks until stop
+```
+
+### From the CLI
 
 ```bash
-cpipe chat chat -j '{"messages": [{"role": "user", "content": "Hello"}]}'
+cpipe --serve chat
 ```
 
-The server replies with one token event per batch, followed by a done sentinel:
+### Via `launch.py`
 
-```json
-{"event": "token", "text": "<token>", "done": false}
-{"event": "token", "text": "", "done": true}
+`named_pipes.chat.launch` is the subprocess entry point used by the TUI. It reads a JSON-serialised `ChatConfig` from `argv[1]`.
+
+## Wire Example
+
+```
+→ {"pid": 1234, "cmd": "chat", "messages": [{"role": "user", "content": "Hello!"}]}
+← {"event": "token", "text": "Hello", "done": false}
+← {"event": "token", "text": "!  How can I help?", "done": false}
+← {"event": "token", "text": "", "done": true}
 ```
 
-#### `chat_blocking` — non-streaming inference
-
-Waits for the full response before replying.
-
-```bash
-cpipe chat chat_blocking -j '{"messages": [{"role": "user", "content": "Hello"}]}'
-```
-
-Replies with a single event:
-
-```json
-{"event": "reply", "text": "<full reply text>"}
-```
-
-## Message format
-
-The `messages` array follows the OpenAI chat format:
-
-```json
-[
-  {"role": "system", "content": "You are a helpful assistant."},
-  {"role": "user", "content": "What is 2 + 2?"},
-  {"role": "assistant", "content": "4"},
-  {"role": "user", "content": "And 3 + 3?"}
-]
-```
-
-## States
-
-The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `get_state` command returns the current state.
-
-| State | When |
-|-------|------|
-| `running` | Server process started |
-| `loading` | Model weights are being loaded |
-| `idle` | Model loaded; no inference in progress |
-| `inferring` | Generating tokens (streaming or blocking) |
-| `stopping` | `stop` command received; shutting down |
-| `error` | Unrecoverable error during load or inference |
-
-## Examples
-
-```bash
-# Check the server is running
-cpipe --list
-
-# Get a one-line description
-cpipe chat get_description
-
-# Streaming chat
-cpipe chat chat -j '{"messages": [{"role": "user", "content": "Tell me a joke"}]}'
-
-# Blocking chat
-cpipe chat chat_blocking -j '{"messages": [{"role": "user", "content": "What is the capital of France?"}]}'
-
-# Multi-turn conversation
-cpipe chat chat -j '{"messages": [{"role": "user", "content": "My name is Alice"}, {"role": "assistant", "content": "Nice to meet you, Alice!"}, {"role": "user", "content": "What is my name?"}]}'
-
-# Shut down the server
-cpipe chat stop
-```
+The `messages` array follows the OpenAI chat format (`role` + `content` pairs).

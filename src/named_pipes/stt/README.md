@@ -1,82 +1,104 @@
-# stt — real-time speech-to-text server
+# named_pipes.stt
 
-Captures audio from the default microphone and broadcasts transcribed tokens in real time using **Voxtral Mini 4B Realtime** (MLX backend). Speech onset and end are detected with Silero VAD.
+Real-time speech-to-text transcription server over named pipes. Captures audio from the default microphone, applies Silero VAD, and broadcasts transcribed tokens to all subscribers using the Voxtral streaming decoder.
 
 Pipe: `/tmp/tool-stt`
 
-## Starting the server
+## Classes
+
+### `STTServer`
+
+`ToolServer` subclass. Implements the `STT` interface. This server is **producer-only** — it accepts no custom commands beyond the built-in `ToolServer` set. All output is broadcast to subscribers as events.
+
+The transcription worker thread starts automatically on server initialisation.
+
+**Broadcast events**
+
+| Event | When |
+|---|---|
+| `speech_start` | VAD detects the onset of speech |
+| `token` | One transcribed sub-word token; `text` field holds the text |
+| `speech_end` | VAD detects the end of speech; all tokens for the utterance have been sent |
+
+Tokens between `speech_start` and `speech_end` form a single utterance. Concatenate their `text` fields to reconstruct the full transcription.
+
+---
+
+### `STTConfig`
+
+Pydantic model holding server configuration.
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model_path` | `str` | `"mistralai/Voxtral-Mini-4B-2507"` | HuggingFace model identifier |
+| `temperature` | `float` | `0.0` | Decoder sampling temperature |
+| `vad_onset` | `float` | `0.5` | Silero VAD speech-start threshold |
+| `vad_offset` | `float` | `0.35` | Silero VAD speech-end threshold |
+
+---
+
+### `STTState`
+
+```python
+class STTState(Enum):
+    LOADING      = "loading"
+    LISTENING    = "listening"
+    TRANSCRIBING = "transcribing"
+    ERROR        = "error"
+```
+
+## Architecture
+
+The STT worker is launched as a daemon thread during `__init__`. It delegates to `named_pipes.stt.voxtral.stream_transcribe()`, which manages:
+
+- Microphone input via `sounddevice`
+- Silero VAD with configurable onset/offset thresholds and pre-roll buffering
+- Voxtral streaming decoder with a rotating KV cache
+- Per-token callbacks forwarded back to `STTServer` for broadcasting
+
+Shutdown is coordinated via a `threading.Event` stop flag.
+
+## Launching
+
+### From Python
+
+```python
+from named_pipes.stt import STTServer, STTConfig
+
+config = STTConfig(vad_onset=0.6)
+server = STTServer(config)
+server.start()  # blocks until stop
+```
+
+### From the CLI
 
 ```bash
-conda activate named-pipes
 cpipe --serve stt
 ```
 
-Model load takes several seconds. When ready the server prints:
+### Via `launch.py`
+
+`named_pipes.stt.launch` is the subprocess entry point used by the TUI. It reads a JSON-serialised `STTConfig` from `argv[1]`.
+
+## Wire Example
 
 ```
-STT server listening on /tmp/tool-stt ...
+(no command sent — server pushes events automatically)
+← {"event": "speech_start"}
+← {"event": "token", "text": "Hello"}
+← {"event": "token", "text": ","}
+← {"event": "token", "text": " world"}
+← {"event": "token", "text": "."}
+← {"event": "speech_end"}
 ```
 
-## Commands
+For continuous transcription in client code, subscribe directly using `ToolClient` rather than `cpipe` (which is designed for one-shot use):
 
-### Built-in (all ToolServer instances support these)
+```python
+from named_pipes.tools import ToolClient
 
-| Command | Description |
-|---|---|
-| `ping` | Health check — responds with `pong` event |
-| `get_state` | Current server state (e.g. `running`) |
-| `get_description` | One-line description of the server |
-| `get_help` | Full help text |
-| `get_config` | Current server configuration |
-| `stop` | Shut the server down gracefully |
-
-The STT server has no custom request commands — it is producer-only. Transcription output is broadcast to all subscribers automatically while audio is detected.
-
-## States
-
-The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `get_state` command returns the current state.
-
-| State | When |
-|-------|------|
-| `running` | Server process started |
-| `loading` | ASR and VAD models are being loaded |
-| `listening` | Models loaded; waiting for speech to begin |
-| `transcribing` | Speech detected; decoding tokens |
-| `stopping` | `stop` command received; shutting down |
-| `error` | Unrecoverable error |
-
-## Broadcast events
-
-While subscribed, a client receives the following events. State transitions (`state_changed`) are interleaved with transcription events:
-
-| Event | When |
-|---|---|
-| `{"event": "state_changed", "state": "<value>"}` | Server state changes (see States above) |
-
-Per utterance:
-
-| Event | When |
-|---|---|
-| `{"event": "speech_start"}` | VAD detects start of speech |
-| `{"event": "token", "text": "<token>"}` | Per token emitted by the decoder |
-| `{"event": "speech_end"}` | End of speech detected; all tokens for the utterance have been sent |
-
-Tokens are sub-word pieces from the Voxtral tokenizer. To reconstruct whole words, concatenate consecutive `token` texts between a `speech_start` / `speech_end` pair.
-
-## Examples
-
-```bash
-# Check the server is running
-cpipe --list
-
-# Get a one-line description
-cpipe stt get_description
-
-# Subscribe and listen — prints transcription to stdout until Ctrl+C
-cpipe stt subscribe --no-wait
-
-# Shut down the server
-cpipe stt stop
+with ToolClient("stt") as client:
+    client.on("token", lambda m: print(m["text"], end="", flush=True))
+    client.on("speech_end", lambda _: print())
+    client.wait()  # block until server stops
 ```
-
-> **Note:** `cpipe` is designed for one-shot command/response use. For continuous transcription in production code, subscribe directly using `STTServer` or `TextNamedPipe` in a Python client (see `src/examples/stt_client.py`).

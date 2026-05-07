@@ -467,7 +467,8 @@ class TuiApp(App):
         if not has_tools:
             self._stop_log_watch.set()
             self.query_one("#tools-stdout", RichLog).clear()
-            self.query_one("#outer-tabs", TabbedContent).active = "tab-launcher"
+            if not has_any:
+                self.query_one("#outer-tabs", TabbedContent).active = "tab-launcher"
         if has_tools:
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value

@@ -92,24 +92,32 @@ class ChatServer(ToolServer):
             help_text=config.help_text,
         )
         self._verbose = config.verbose
+        self._model_ready = threading.Event()
+        self._load_error: str | None = None
         self.set_state(ChatState.LOADING)
 
-        try:
-            match config.backend:
-                case Backend.VLLM:
-                    self._init_vllm(config.model, **config.backend_kwargs)
-                case Backend.TRANSFORMERS:
-                    self._init_transformers(config.model, **config.backend_kwargs)
-                case _:
-                    raise ValueError(f"unknown backend: {config.backend!r}")
-        except Exception:
-            self.set_state(ChatState.ERROR)
-            raise
-
-        self.set_state(ChatState.IDLE)
-
+        # Register handlers immediately so the listener can serve pings/state
+        # queries while the model loads in the background.
         self.handler("chat")(self._handle_chat)
         self.handler("chat_blocking")(self._handle_chat_blocking)
+
+        def _load():
+            try:
+                match config.backend:
+                    case Backend.VLLM:
+                        self._init_vllm(config.model, **config.backend_kwargs)
+                    case Backend.TRANSFORMERS:
+                        self._init_transformers(config.model, **config.backend_kwargs)
+                    case _:
+                        raise ValueError(f"unknown backend: {config.backend!r}")
+                self.set_state(ChatState.IDLE)
+            except Exception as exc:
+                self._load_error = str(exc)
+                self.set_state(ChatState.ERROR)
+            finally:
+                self._model_ready.set()
+
+        threading.Thread(target=_load, daemon=True).start()
 
     def _list_interfaces(self) -> list[str]:
         return super()._list_interfaces() + ["chat"]
@@ -138,11 +146,23 @@ class ChatServer(ToolServer):
         # interleave their chunks on the downstream pipe — add per-client
         # request sequencing in a future version.
         messages = msg.get("messages", [])
-        threading.Thread(
-            target=self._infer_stream, args=(messages, pid), daemon=True
-        ).start()
+
+        def _run():
+            self._model_ready.wait()
+            if self._load_error:
+                self.send_event("error", pid, message=f"model failed to load: {self._load_error}")
+                return
+            self._infer_stream(messages, pid)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     def _handle_chat_blocking(self, msg: dict, pid: int | None):
+        if not self._model_ready.is_set():
+            self.send_event("error", pid, message="model is still loading")
+            return
+        if self._load_error:
+            self.send_event("error", pid, message=f"model failed to load: {self._load_error}")
+            return
         messages = msg.get("messages", [])
         self.set_state(ChatState.INFERRING)
         try:

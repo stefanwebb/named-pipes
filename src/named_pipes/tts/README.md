@@ -1,99 +1,96 @@
-# tts — real-time text-to-speech server
+# named_pipes.tts
 
-Synthesises speech in real time from streamed text tokens using **Kokoro-82M** (mlx-audio). Text is buffered and split on sentence boundaries; each sentence is synthesised and played through the system audio output as it arrives.
+Real-time text-to-speech synthesis server over named pipes. Accepts streamed text from clients, detects sentence boundaries, synthesises audio with Kokoro (via `mlx-audio`), and plays it through the system audio output.
 
 Pipe: `/tmp/tool-tts`
 
-## Starting the server
+## Classes
 
-```bash
-conda activate named-pipes
-cpipe --serve tts
-```
+### `TTSServer`
 
-The server loads the model on startup, then prints:
+`ToolServer` subclass. Implements the `TTS` interface on top of base `ToolServer` commands.
 
-```
-[TTS] Loading model 'mlx-community/Kokoro-82M-bf16'…
-[TTS] Audio stream started.
-TTS server listening on /tmp/tool-tts ...
-```
-
-## Commands
-
-### Built-in (all ToolServer instances support these)
+**Supported commands**
 
 | Command | Description |
 |---|---|
-| `ping` | Health check — responds with `pong` event |
-| `get_state` | Current server state (e.g. `running`) |
-| `get_description` | One-line description of the server |
-| `get_help` | Full help text |
-| `get_config` | Current server configuration |
-| `stop` | Shut the server down gracefully |
+| `text` | Append text to the synthesis buffer; sentences are spoken as they complete |
+| `flush` | Force synthesis of any remaining buffered text (no sentence boundary required) |
+| `is_speaking` | Query whether audio is currently playing; responds with `is_speaking` event |
 
-## States
+The server emits `speech_start` and `speech_end` broadcast events to all subscribers when audio playback begins and ends.
 
-The server broadcasts `{"event": "state_changed", "state": "<value>"}` to all subscribers on every transition. The `get_state` command returns the current state.
+---
 
-| State | When |
-|-------|------|
-| `running` | Server process started |
-| `loading` | TTS model is being loaded |
-| `idle` | Model loaded; sentence queue is empty |
-| `synthesizing` | Generating audio for a queued sentence |
-| `stopping` | `stop` command received; shutting down |
-| `error` | Unrecoverable error during load |
+### `TTSConfig`
 
-### `text` — append tokens to the synthesis buffer
+Pydantic model holding server configuration.
 
-Appends text to the internal buffer. When a sentence boundary (`.`, `!`, or `?` followed by whitespace) is detected, the sentence is synthesised and played automatically. No response is sent.
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `model` | `str` | `"mlx-community/Kokoro-82M-bf16"` | mlx-audio model identifier |
+| `voice` | `str` | `"af_heart"` | Kokoro voice name |
+| `sample_rate` | `int` | `24000` | Audio sample rate (Hz) |
+| `blocksize` | `int` | `2048` | `sounddevice` callback block size (samples) |
 
-```bash
-cpipe tts text -d "Hello, world."
+---
+
+### `TTSState`
+
+```python
+class TTSState(Enum):
+    LOADING      = "loading"
+    IDLE         = "idle"
+    SYNTHESIZING = "synthesizing"
+    ERROR        = "error"
 ```
 
-### `flush` — drain the buffer
-
-Forces any remaining buffered text to be synthesised immediately, even if no sentence boundary has been detected. Use this after the last token to ensure the final fragment is spoken. No response is sent.
-
-```bash
-cpipe tts flush
-```
-
-## Pipeline
+## Audio Pipeline
 
 ```
 text commands → [sentence splitter] → sentence queue
-              → [TTS worker]        → audio queue
-              → [audio callback]    → speakers
+              → [TTS worker thread] → audio chunk queue
+              → [sounddevice callback] → speakers
 ```
 
-Audio plays through the system default output device in real time. No audio data is returned over the pipe.
+**Sentence splitter** — buffers incoming text and enqueues complete sentences when it detects a sentence-ending punctuation mark (`. ! ?`) followed by whitespace.
 
-## Examples
+**TTS worker thread** — dequeues sentences, calls the Kokoro model to synthesise raw PCM frames, and pushes them onto the audio chunk queue.
+
+**Audio callback** — runs on the `sounddevice.OutputStream` thread at playback rate. Drains the audio chunk queue frame by frame and pads underruns with silence to keep the stream continuous.
+
+The `speech_start` event is broadcast when the first audio frame starts playing. `speech_end` is broadcast when the queue drains and silence padding begins.
+
+## Launching
+
+### From Python
+
+```python
+from named_pipes.tts import TTSServer, TTSConfig
+
+config = TTSConfig(voice="af_heart")
+server = TTSServer(config)
+server.start()  # blocks until stop
+```
+
+### From the CLI
 
 ```bash
-# Check the server is running
-cpipe --list
-
-# Get a one-line description
-cpipe tts get_description
-
-# Speak a single sentence
-cpipe tts text -d "The quick brown fox jumps over the lazy dog." --no-wait
-
-# Stream multiple tokens then flush (typical LLM integration pattern)
-cpipe tts text -d "Once upon a time" --no-wait
-cpipe tts text -d " there was a robot." --no-wait
-cpipe tts flush --no-wait
-
-# Speak a longer passage
-cpipe tts text -d "Hello! How are you today? I hope you are well." --no-wait
-cpipe tts flush --no-wait
-
-# Shut down the server
-cpipe tts stop
+cpipe --serve tts
 ```
 
-> **Note:** `text` and `flush` do not return a response, so use `--no-wait` to avoid a timeout. For LLM-to-TTS pipelines, see `src/examples/tts_client.py`.
+### Via `launch.py`
+
+`named_pipes.tts.launch` is the subprocess entry point used by the TUI. It reads a JSON-serialised `TTSConfig` from `argv[1]`.
+
+## Wire Example
+
+```
+→ {"pid": 1234, "cmd": "text", "text": "Hello, world."}
+  (audio plays through speakers; no pipe response)
+→ {"pid": 1234, "cmd": "flush"}
+← {"event": "speech_start"}     (broadcast to all subscribers)
+← {"event": "speech_end"}       (broadcast when audio finishes)
+```
+
+`text` and `flush` do not send a reply to the caller. Use `--no-wait` with `cpipe` to avoid a timeout.
