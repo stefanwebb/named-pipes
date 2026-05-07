@@ -348,7 +348,7 @@ Examples:
         return
 
     if not args.pipe or not args.cmd:
-        from named_pipes.tui_app import TuiApp
+        from named_pipes.app.tui import TuiApp
         TuiApp().run()
         return
 

@@ -11,7 +11,7 @@ from named_pipes.registry import Backend as RegBackend, ServerType, default_for_
 from named_pipes.system import get_system_info, _tool_name_from_path
 from named_pipes.tool_client import ToolClient
 from named_pipes.utils import _is_fifo_connected, scan_pipes
-from named_pipes.widgets import AutoTextArea
+from named_pipes.app.widgets import AutoTextArea
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 from textual.widgets import (
