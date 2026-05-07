@@ -87,6 +87,7 @@ class _ManagedClient:
         self._state_val: str = "unknown"
         self._discovering = True
         self._pending_ifaces = 0
+        self._suppress_pong = False
 
         @self._client.on("pong")
         def _(msg):
@@ -107,6 +108,8 @@ class _ManagedClient:
         @self._client.on("interfaces")
         def _(msg):
             self.interfaces = msg.get("interfaces", [])
+            if not self._discovering:
+                return
             self._pending_ifaces = len(self.interfaces)
             if self._pending_ifaces == 0:
                 self._discovering = False
@@ -137,6 +140,8 @@ class _ManagedClient:
             if cb is not None and event not in ("subscribed",):
                 if event == "interface" and was_discovering:
                     return
+                if event == "pong" and _mc._suppress_pong:
+                    return
                 cb(msg)
 
         self._client.msg_handler_fn = types.MethodType(_patched, self._client)
@@ -150,8 +155,10 @@ class _ManagedClient:
     def poll(self) -> tuple[bool, str]:
         """Send ping; return (healthy, state). State is maintained via events."""
         self._pong_event.clear()
+        self._suppress_pong = True
         self._client.send_command("ping")
         healthy = self._pong_event.wait(timeout=0.5)
+        self._suppress_pong = False
         return healthy, self._state_val
 
     def send_command(self, cmd: str, **kwargs) -> None:
@@ -551,8 +558,6 @@ class TuiApp(App):
 
     def _on_tool_event(self, msg: dict) -> None:
         event = msg.get("event", "unknown")
-        if event == "pong":
-            return
         if event in ("state", "state_changed"):
             tool = self._active_messenger_tool
             if tool and tool in self._managed_clients:
