@@ -36,6 +36,7 @@ class STTState(Enum):
 
 class STTConfig(BaseModel):
     name: str = "stt"
+    description: str = "👂 Real-time speech-to-text server over a named pipe."
     model_path: str = "mlx-community/Voxtral-Mini-4B-Realtime-6bit"
     temperature: float = 0.0
     vad_onset: int = 2
@@ -54,7 +55,7 @@ class STTServer(ToolServer):
     def __init__(self, config: STTConfig = STTConfig()):
         super().__init__(
             config.name,
-            description="🎙️ Real-time speech-to-text server over a named pipe.",
+            description=config.description,
         )
         self.set_state(STTState.LOADING)
         self._stop_event = threading.Event()

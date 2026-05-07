@@ -62,6 +62,7 @@ MODEL_ID = "mlx-community/Kokoro-82M-bf16"
 
 class TTSConfig(BaseModel):
     name: str = "tts"
+    description: str = "💬 Real-time text-to-speech server over a named pipe."
     voice: str = VOICE
     sample_rate: int = SAMPLE_RATE
     blocksize: int = BLOCKSIZE
@@ -89,7 +90,7 @@ class TTSServer(ToolServer):
     def __init__(self, config: TTSConfig = TTSConfig()):
         super().__init__(
             config.name,
-            description="🔊 Real-time text-to-speech server over a named pipe.",
+            description=config.description,
         )
         self._voice = config.voice
         self._sample_rate = config.sample_rate

@@ -13,7 +13,7 @@ import threading
 import types
 
 from rich.text import Text
-from named_pipes.chat.server import Backend
+from named_pipes.chat.server import Backend, ChatConfig
 from named_pipes.registry import Backend as RegBackend, ServerType, default_for_backend, models_for_backend
 from named_pipes.system import get_system_info, _tool_name_from_path
 from named_pipes.tools.client import ToolClient
@@ -28,6 +28,7 @@ from textual.widgets import (
     Header,
     Input,
     Label,
+    RichLog,
     Rule,
     Select,
     Switch,
@@ -245,7 +246,7 @@ class TuiApp(App):
     def compose(self) -> ComposeResult:
         info = get_system_info()
         yield Header()
-        with TabbedContent(initial="tab-tools", id="outer-tabs"):
+        with TabbedContent(initial="tab-launcher", id="outer-tabs"):
             with TabPane("Tools", id="tab-tools"):
                 with Horizontal():
                     with Vertical(classes="system-col") as tools_left:
@@ -278,7 +279,8 @@ class TuiApp(App):
                             yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
 
                         with Vertical(classes="output-col") as tools_output:
-                            tools_output.border_title = "Output"
+                            tools_output.border_title = "stdout"
+                            yield RichLog(id="tools-stdout", markup=False, highlight=False, max_lines=1000)
             with TabPane("Launch", id="tab-launcher"):
                 with Horizontal():
                     with Vertical(classes="system-col") as launcher_left:
@@ -288,7 +290,7 @@ class TuiApp(App):
                                 with VerticalScroll():
                                     with Horizontal(classes="field-row"):
                                         yield Label("name:")
-                                        yield _Input(value="chat", id="chat-name")
+                                        yield _Input(value=ChatConfig.model_fields["name"].default, id="chat-name")
                                     with Horizontal(classes="field-row"):
                                         yield Label("model:")
                                         yield Select(
@@ -301,22 +303,22 @@ class TuiApp(App):
                                         yield Label("backend:")
                                         yield Select(
                                             [(b.value, b) for b in Backend],
-                                            value=Backend.TRANSFORMERS,
+                                            value=ChatConfig.model_fields["backend"].default,
                                             allow_blank=False,
                                             id="chat-backend",
                                         )
                                     with Horizontal(classes="field-row"):
                                         yield Label("description:")
-                                        yield _Input(value="LLM chat server over a named pipe.", id="chat-description")
+                                        yield _Input(value=ChatConfig.model_fields["description"].default, id="chat-description")
                                     with Horizontal(classes="field-row"):
                                         yield Label("backend_kwargs:")
                                         yield AutoTextArea(
-                                            json.dumps({"max_new_tokens": 256, "do_sample": False}, indent=2),
+                                            json.dumps(ChatConfig.model_fields["backend_kwargs"].default, indent=2),
                                             id="backend-kwargs",
                                         )
                                     with Horizontal(classes="field-row"):
                                         yield Label("verbose:")
-                                        yield Switch(value=False, id="chat-verbose")
+                                        yield Switch(value=ChatConfig.model_fields["verbose"].default, id="chat-verbose")
                                     yield Button("Launch", id="chat-launch", variant="success")
                             with TabPane("Text-to-speech", id="launcher-tts"):
                                 yield Label("Text-to-speech content goes here.")
@@ -328,7 +330,7 @@ class TuiApp(App):
                             yield _ToolsTable(id="tools-table-launcher", cursor_type="row", show_cursor=False)
 
                         with Vertical(classes="output-col") as launcher_output:
-                            launcher_output.border_title = "Output"
+                            launcher_output.border_title = "stdout"
             with TabPane("Info", id="tab-info"):
                 with Vertical(classes="system-col") as info_col:
                     info_col.border_title = "Info"
@@ -348,6 +350,7 @@ class TuiApp(App):
         self._managed_clients: dict[str, _ManagedClient] = {}
         self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
+        self._stop_log_watch = threading.Event()
         self._active_messenger_tool: str | None = None
         self._active_messenger_cmd: str | None = None
         self._interfaces: dict[str, dict] = {}
@@ -368,6 +371,8 @@ class TuiApp(App):
     def on_unmount(self) -> None:
         if hasattr(self, "_stop_polling"):
             self._stop_polling.set()
+        if hasattr(self, "_stop_log_watch"):
+            self._stop_log_watch.set()
         for mc in getattr(self, "_managed_clients", {}).values():
             mc.close()
 
@@ -454,8 +459,15 @@ class TuiApp(App):
         running_names = [name for name, healthy, _, _ in statuses if healthy]
         messenger_select = self.query_one("#messenger-tool", Select)
         has_tools = bool(running_names)
+        had_tools = self.query_one("#messenger-controls", Vertical).display
         self.query_one("#messenger-empty", Label).display = not has_tools
         self.query_one("#messenger-controls", Vertical).display = has_tools
+        if has_tools and not had_tools:
+            self.query_one("#outer-tabs", TabbedContent).active = "tab-tools"
+        if not has_tools:
+            self._stop_log_watch.set()
+            self.query_one("#tools-stdout", RichLog).clear()
+            self.query_one("#outer-tabs", TabbedContent).active = "tab-launcher"
         if has_tools:
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value
@@ -581,6 +593,34 @@ class TuiApp(App):
         text = f"{event}: {json.dumps(data)}" if data else event
         self.notify(text, timeout=5)
 
+    def _start_log_watcher(self, name: str) -> None:
+        self._stop_log_watch.set()
+        self._stop_log_watch = threading.Event()
+        stop = self._stop_log_watch
+        log_path = f"/tmp/tool-{name}.log"
+        log_widget = self.query_one("#tools-stdout", RichLog)
+        log_widget.clear()
+
+        def _watch() -> None:
+            try:
+                for _ in range(20):
+                    if os.path.exists(log_path) or stop.is_set():
+                        break
+                    stop.wait(timeout=0.25)
+                if stop.is_set():
+                    return
+                with open(log_path, "r") as f:
+                    while not stop.is_set():
+                        line = f.readline()
+                        if line:
+                            self.call_from_thread(log_widget.write, line.rstrip("\n"))
+                        else:
+                            stop.wait(timeout=0.05)
+            except Exception:
+                pass
+
+        threading.Thread(target=_watch, daemon=True).start()
+
     @on(Select.Changed, "#messenger-tool")
     def on_messenger_tool_changed(self, event: Select.Changed) -> None:
         self._save_current_args()
@@ -597,6 +637,7 @@ class TuiApp(App):
         self._update_messenger_status(name, status_map)
         self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
         self._refresh_messenger_commands(name)
+        self._start_log_watcher(name)
 
     @on(Select.Changed, "#messenger-cmd")
     def on_messenger_cmd_changed(self, event: Select.Changed) -> None:

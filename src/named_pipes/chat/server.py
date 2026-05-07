@@ -51,7 +51,7 @@ class ChatConfig(BaseModel):
     name: str = "chat"
     model: str = "Qwen/Qwen3.5-0.8B"
     backend: Backend = Backend.TRANSFORMERS if platform.system() == "Darwin" else Backend.VLLM
-    description: str = "💬 LLM chat server over a named pipe."
+    description: str = "🤖 LLM chat server over a named pipe."
     help_text: str | None = None
     backend_kwargs: dict = {"max_new_tokens": 256, "do_sample": False}
     verbose: bool = False
