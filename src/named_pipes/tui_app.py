@@ -11,6 +11,7 @@ from named_pipes.registry import Backend as RegBackend, ServerType, default_for_
 from named_pipes.system import get_system_info, _tool_name_from_path
 from named_pipes.tool_client import ToolClient
 from named_pipes.utils import _is_fifo_connected, scan_pipes
+from named_pipes.widgets import AutoTextArea
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 from textual.widgets import (
@@ -192,7 +193,7 @@ class TuiApp(App):
         width: 20;
         padding-right: 1;
     }
-    .field-row Input, .field-row Select {
+    .field-row Input, .field-row Select, .field-row AutoTextArea {
         width: 1fr;
     }
     #backend-kwargs {
@@ -320,6 +321,7 @@ class TuiApp(App):
         self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
         self._active_messenger_tool: str | None = None
+        self._active_messenger_cmd: str | None = None
         self._interfaces: dict[str, dict] = {}
         self._arg_cache: dict[str, dict[str, dict[str, str]]] = {}
 
@@ -467,14 +469,13 @@ class TuiApp(App):
 
     def _save_current_args(self) -> None:
         tool = self._active_messenger_tool
-        cmd_select = self.query_one("#messenger-cmd", Select)
-        cmd = str(cmd_select.value) if cmd_select.value is not Select.BLANK else None
+        cmd = self._active_messenger_cmd
         if not tool or not cmd:
             return
         cache = self._arg_cache.setdefault(tool, {}).setdefault(cmd, {})
-        for inp in self.query_one("#messenger-args", Vertical).query(Input):
-            arg_name = inp.id.removeprefix("messenger-arg-")
-            cache[arg_name] = inp.value
+        for ta in self.query_one("#messenger-args", Vertical).query(AutoTextArea):
+            arg_name = ta.id.removeprefix("messenger-arg-")
+            cache[arg_name] = ta.text
 
     def _refresh_messenger_args(self, tool_name: str, cmd_name: str) -> None:
         container = self.query_one("#messenger-args", Vertical)
@@ -492,9 +493,8 @@ class TuiApp(App):
             container.mount(
                 Horizontal(
                     Label(f"{arg_name}:"),
-                    _Input(
-                        value=initial,
-                        placeholder=arg.get("description", ""),
+                    AutoTextArea(
+                        initial,
                         id=f"messenger-arg-{arg_name}",
                     ),
                     classes="field-row",
@@ -560,6 +560,7 @@ class TuiApp(App):
         self._save_current_args()
         name = str(event.value)
         self._active_messenger_tool = name
+        self._active_messenger_cmd = None  # prevent stale save during command refresh
         for n, mc in self._managed_clients.items():
             mc.on_event = self._make_event_callback() if n == name else None
         if name in self._managed_clients:
@@ -574,9 +575,22 @@ class TuiApp(App):
     @on(Select.Changed, "#messenger-cmd")
     def on_messenger_cmd_changed(self, event: Select.Changed) -> None:
         self._save_current_args()
+        self._active_messenger_cmd = str(event.value)
         tool = self._active_messenger_tool
         if tool:
             self._refresh_messenger_args(tool, str(event.value))
+
+    @on(TextArea.Changed)
+    def on_messenger_arg_changed(self, event: TextArea.Changed) -> None:
+        ta = event.text_area
+        if not (isinstance(ta, AutoTextArea) and ta.id and ta.id.startswith("messenger-arg-")):
+            return
+        tool = self._active_messenger_tool
+        cmd = self._active_messenger_cmd
+        if not tool or not cmd:
+            return
+        arg_name = ta.id.removeprefix("messenger-arg-")
+        self._arg_cache.setdefault(tool, {}).setdefault(cmd, {})[arg_name] = ta.text
 
     @on(Button.Pressed, "#messenger-send")
     def on_messenger_send(self) -> None:
@@ -590,18 +604,18 @@ class TuiApp(App):
         spec = self._command_spec(tool, cmd)
         arg_types = {arg["name"]: arg.get("type", "str") for arg in (spec.get("args", []) if spec else [])}
         kwargs = {}
-        for inp in self.query_one("#messenger-args", Vertical).query(Input):
-            if not inp.value:
+        for ta in self.query_one("#messenger-args", Vertical).query(AutoTextArea):
+            if not ta.text:
                 continue
-            arg_name = inp.id.removeprefix("messenger-arg-")
+            arg_name = ta.id.removeprefix("messenger-arg-")
             if arg_types.get(arg_name, "str") != "str":
                 try:
-                    kwargs[arg_name] = json.loads(inp.value)
+                    kwargs[arg_name] = json.loads(ta.text)
                 except json.JSONDecodeError:
                     self.notify(f"Argument '{arg_name}' must be valid JSON", severity="error")
                     return
             else:
-                kwargs[arg_name] = inp.value
+                kwargs[arg_name] = ta.text
         mc.send_command(cmd, **kwargs)
 
     @on(Select.Changed, "#chat-backend")
