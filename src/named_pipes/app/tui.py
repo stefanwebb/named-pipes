@@ -261,9 +261,6 @@ class TuiApp(App):
                                     id="messenger-tool",
                                 )
                             with Horizontal(classes="field-row"):
-                                yield Label("state:")
-                                yield Label("—", id="messenger-health")
-                            with Horizontal(classes="field-row"):
                                 yield Label("command:")
                                 yield Select(
                                     [(c, c) for c in _MESSENGER_COMMANDS],
@@ -359,9 +356,8 @@ class TuiApp(App):
 
         for tid in self._TABLE_IDS:
             table = self.query_one(f"#{tid}", _ToolsTable)
-            table.add_column("", key="health", width=2)
+            table.add_column("", key="health", width=14)
             table.add_column("Name", key="name")
-            table.add_column("State", key="state")
             table.add_column("Description", key="description")
 
         self.query_one("#messenger-empty", Label).display = True
@@ -440,17 +436,17 @@ class TuiApp(App):
 
             for name, healthy, state, description in statuses:
                 if not healthy or state == "error":
-                    health = Text("●", style="red bold")
+                    style = "red bold"
                 elif state == "idle":
-                    health = Text("●", style="grey50 bold")
+                    style = "grey50 bold"
                 else:
-                    health = Text("●", style="green bold")
+                    style = "green bold"
+                health = Text(f"● {state}", style=style)
                 if name in rows:
                     table.update_cell(name, "health", health)
-                    table.update_cell(name, "state", state)
                     table.update_cell(name, "description", description)
                 else:
-                    table.add_row(health, name, state, description, key=name)
+                    table.add_row(health, name, description, key=name)
                     rows.add(name)
 
         has_any = bool(statuses)
@@ -479,8 +475,6 @@ class TuiApp(App):
                 current_val if any(v == current_val for _, v in options) else running_names[0]
             )
 
-        status_map = {name: (healthy, state) for name, healthy, state, _ in statuses}
-        self._update_messenger_status(str(messenger_select.value), status_map)
 
     def _commands_for_tool(self, tool_name: str) -> list[dict]:
         mc = self._managed_clients.get(tool_name)
@@ -544,16 +538,6 @@ class TuiApp(App):
                 )
             )
 
-    def _update_messenger_status(self, name: str, status_map: dict[str, tuple[bool, str]]) -> None:
-        healthy, state = status_map.get(name, (False, "—"))
-        if not healthy or state == "error":
-            text = Text(f"● {state}", style="red bold")
-        elif state == "idle":
-            text = Text(f"● {state}", style="grey50 bold")
-        else:
-            text = Text(f"● {state}", style="green bold")
-        self.query_one("#messenger-health", Label).update(text)
-
     @on(_ToolsTable.RowClicked)
     def on_tools_row_clicked(self, event: _ToolsTable.RowClicked) -> None:
         name = str(event.row_key.value)
@@ -587,13 +571,12 @@ class TuiApp(App):
 
     def _on_tool_event(self, msg: dict) -> None:
         event = msg.get("event", "unknown")
-        if event in ("state", "state_changed"):
-            tool = self._active_messenger_tool
-            if tool and tool in self._managed_clients:
-                mc = self._managed_clients[tool]
-                self._update_messenger_status(tool, {tool: (True, mc._state_val)})
         data = {k: v for k, v in msg.items() if k != "event"}
         text = f"{event}: {json.dumps(data)}" if data else event
+        _MAX = 120
+        if len(text) > _MAX:
+            n_lines = text.count("\n") + text.count("\\n") + 1
+            text = text[:_MAX] + f"… [{n_lines} lines]"
         self.notify(text, timeout=5)
 
     def _start_log_watcher(self, name: str) -> None:
@@ -632,12 +615,6 @@ class TuiApp(App):
         self._active_messenger_cmd = None  # prevent stale save during command refresh
         for n, mc in self._managed_clients.items():
             mc.on_event = self._make_event_callback() if n == name else None
-        if name in self._managed_clients:
-            mc = self._managed_clients[name]
-            status_map = {name: (True, mc._state_val)}
-        else:
-            status_map = {}
-        self._update_messenger_status(name, status_map)
         self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
         self._refresh_messenger_commands(name)
         self._start_log_watcher(name)

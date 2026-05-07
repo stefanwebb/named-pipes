@@ -54,7 +54,7 @@ class ChatConfig(BaseModel):
     description: str = "🤖 LLM chat server over a named pipe."
     help_text: str | None = None
     backend_kwargs: dict = {"max_new_tokens": 256, "do_sample": False}
-    verbose: bool = False
+    verbose: bool = True
 
 
 class ChatServer(ToolServer):
@@ -164,14 +164,18 @@ class ChatServer(ToolServer):
             self.send_event("error", pid, message=f"model failed to load: {self._load_error}")
             return
         messages = msg.get("messages", [])
-        self.set_state(ChatState.INFERRING)
-        try:
-            reply = self._infer(messages)
-        except Exception:
-            self.set_state(ChatState.ERROR)
-            raise
-        self.send_event("reply", pid, text=reply)
-        self.set_state(ChatState.IDLE)
+
+        def _run():
+            self.set_state(ChatState.INFERRING)
+            try:
+                reply = self._infer(messages)
+            except Exception:
+                self.set_state(ChatState.ERROR)
+                raise
+            self.send_event("reply", pid, text=reply)
+            self.set_state(ChatState.IDLE)
+
+        threading.Thread(target=_run, daemon=True).start()
 
     # -----------------------------------------------------------------------
     # Streaming helpers
