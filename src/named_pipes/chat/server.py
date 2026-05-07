@@ -127,12 +127,12 @@ class ChatServer(ToolServer):
     # -----------------------------------------------------------------------
 
     def msg_handler_fn(self, msg: dict, pid: int | None):
-        if self._verbose:
+        if self._verbose and msg.get("cmd") != "ping":
             print(f">> {json.dumps(msg)}", flush=True)
         super().msg_handler_fn(msg, pid)
 
     def send_event(self, event: str, pid: int | None = None, **kwargs):
-        if self._verbose:
+        if self._verbose and event != "pong":
             print(f"<< {json.dumps({'event': event, **kwargs})}", flush=True)
         super().send_event(event, pid, **kwargs)
 

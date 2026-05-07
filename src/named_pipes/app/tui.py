@@ -355,6 +355,7 @@ class TuiApp(App):
         self._active_messenger_cmd: str | None = None
         self._interfaces: dict[str, dict] = {}
         self._arg_cache: dict[str, dict[str, dict[str, str]]] = {}
+        self._had_any_tools: bool = False
 
         for tid in self._TABLE_IDS:
             table = self.query_one(f"#{tid}", _ToolsTable)
@@ -467,8 +468,9 @@ class TuiApp(App):
         if not has_tools:
             self._stop_log_watch.set()
             self.query_one("#tools-stdout", RichLog).clear()
-            if not has_any:
-                self.query_one("#outer-tabs", TabbedContent).active = "tab-launcher"
+        if not has_any and self._had_any_tools:
+            self.query_one("#outer-tabs", TabbedContent).active = "tab-launcher"
+        self._had_any_tools = has_any
         if has_tools:
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value
