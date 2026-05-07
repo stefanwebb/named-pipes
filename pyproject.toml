@@ -55,7 +55,7 @@ kokoro = ["misaki[en]"]
 dev = ["pytest", "ruff"]
 
 [project.scripts]
-cpipe = "named_pipes.cpipe:main"
+cpipe = "named_pipes.app.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
