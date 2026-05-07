@@ -48,10 +48,10 @@ class ToolServer(TextNamedPipe):
         self._tool_name = name
         self._description = description
         if help_text is None:
-            # Look for SKILL.md next to the concrete subclass's module file.
+            # Look for HELP.md next to the concrete subclass's module file.
             subclass_file = inspect.getfile(type(self))
-            skill_md = Path(subclass_file).parent / "SKILL.md"
-            help_text = skill_md.read_text() if skill_md.exists() else description
+            help_md = Path(subclass_file).parent / "HELP.md"
+            help_text = help_md.read_text() if help_md.exists() else description
         self._help_text = help_text
         self._handlers: dict[str, callable] = {}
         self._register_builtin_handlers()
