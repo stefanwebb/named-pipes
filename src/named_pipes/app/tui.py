@@ -219,6 +219,20 @@ class TuiApp(App):
     #messenger-args {
         height: auto;
     }
+    .right-split {
+        width: 1fr;
+        height: 100%;
+    }
+    .right-split .system-col {
+        height: 1fr;
+    }
+    .output-col {
+        border: round $primary;
+        padding: 1;
+        margin: 1;
+        overflow-y: auto;
+        height: 2fr;
+    }
     """
 
     BINDINGS = [
@@ -258,9 +272,13 @@ class TuiApp(App):
                             with Vertical(id="messenger-args"):
                                 pass
                             yield Button("Send", id="messenger-send", variant="primary")
-                    with Vertical(classes="system-col") as tools_right:
-                        tools_right.border_title = "Tools"
-                        yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
+                    with Vertical(classes="right-split"):
+                        with Vertical(classes="system-col") as tools_right:
+                            tools_right.border_title = "Tools"
+                            yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
+
+                        with Vertical(classes="output-col") as tools_output:
+                            tools_output.border_title = "Output"
             with TabPane("Launch", id="tab-launcher"):
                 with Horizontal():
                     with Vertical(classes="system-col") as launcher_left:
@@ -304,9 +322,13 @@ class TuiApp(App):
                                 yield Label("Text-to-speech content goes here.")
                             with TabPane("Speech-to-text", id="launcher-stt"):
                                 yield Label("Speech-to-text content goes here.")
-                    with Vertical(classes="system-col") as launcher_right:
-                        launcher_right.border_title = "Tools"
-                        yield _ToolsTable(id="tools-table-launcher", cursor_type="row", show_cursor=False)
+                    with Vertical(classes="right-split"):
+                        with Vertical(classes="system-col") as launcher_right:
+                            launcher_right.border_title = "Tools"
+                            yield _ToolsTable(id="tools-table-launcher", cursor_type="row", show_cursor=False)
+
+                        with Vertical(classes="output-col") as launcher_output:
+                            launcher_output.border_title = "Output"
             with TabPane("Info", id="tab-info"):
                 with Vertical(classes="system-col") as info_col:
                     info_col.border_title = "Info"
