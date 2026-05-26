@@ -12,6 +12,7 @@ import sys
 import threading
 import types
 
+from rich.segment import Segment
 from rich.text import Text
 from named_pipes.chat.server import Backend, ChatConfig
 from named_pipes.tts.server import TTSConfig
@@ -24,6 +25,8 @@ from named_pipes.app.widgets import AutoTextArea
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
 from textual.screen import ModalScreen
+from textual.strip import Strip
+from textual.widget import Widget
 from textual.widgets import (
     Button,
     DataTable,
@@ -174,6 +177,37 @@ class _ManagedClient:
             self._client._close()
         except Exception:
             pass
+
+
+class _VerticalSeparator(Widget):
+    DEFAULT_CSS = """
+    _VerticalSeparator {
+        width: 1;
+        height: 100%;
+        margin: 0;
+        color: $primary;
+    }
+    """
+
+    def __init__(self, *panel_ids: str):
+        super().__init__()
+        self._panel_ids = panel_ids
+
+    def render_line(self, y: int) -> Strip:
+        style = self.rich_style
+        char = "│"
+        try:
+            my_y = self.region.y
+            junctions: set[int] = set()
+            for pid in self._panel_ids:
+                r = self.app.query_one(f"#{pid}").region
+                junctions.add(r.y - my_y)
+                junctions.add(r.y + r.height - 1 - my_y)
+            if y in junctions:
+                char = "├"
+        except Exception:
+            pass
+        return Strip([Segment(char, style)])
 
 
 class LaunchModal(ModalScreen):
@@ -479,6 +513,7 @@ class TuiApp(App):
         width: 1fr;
         height: 100%;
         margin-right: 0;
+        border-right: none;
     }
     .right-split {
         width: 2fr;
@@ -515,8 +550,9 @@ class TuiApp(App):
             with Vertical(classes="system-col", id="tools-panel") as tools_panel:
                 tools_panel.border_title = "Tools"
                 yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
+            yield _VerticalSeparator("commands-panel", "stdout-panel")
             with Vertical(classes="right-split"):
-                with Vertical(classes="system-col") as commands_panel:
+                with Vertical(classes="system-col", id="commands-panel") as commands_panel:
                     commands_panel.border_title = "Commands"
                     yield Label("No tools running.", id="messenger-empty")
                     with Vertical(id="messenger-controls"):
@@ -537,7 +573,7 @@ class TuiApp(App):
                         with Vertical(id="messenger-args"):
                             pass
                         yield Button("Send", id="messenger-send", variant="primary")
-                with Vertical(classes="output-col") as stdout_panel:
+                with Vertical(classes="output-col", id="stdout-panel") as stdout_panel:
                     stdout_panel.border_title = "stdout"
                     yield RichLog(id="tools-stdout", markup=False, highlight=False, max_lines=1000)
         yield Footer()
