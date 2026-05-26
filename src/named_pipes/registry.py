@@ -92,7 +92,14 @@ REGISTRY: list[ModelEntry] = [
         servers=[ServerType.CHAT],
         backends=[Backend.TRANSFORMERS, Backend.VLLM],
         default=True,
-        description="Qwen 3.5 0.8B — default chat model",
+        description="Qwen3.5 0.8B — default chat model",
+    ),
+    ModelEntry(
+        hub_id="Qwen/Qwen3-0.6B",
+        servers=[ServerType.CHAT],
+        backends=[Backend.TRANSFORMERS, Backend.VLLM],
+        default=True,
+        description="Qwen3 0.6B",
     ),
     ModelEntry(
         hub_id="mlx-community/Kokoro-82M-bf16",

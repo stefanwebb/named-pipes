@@ -26,7 +26,11 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Topic :: Multimedia :: Sound/Audio :: Speech",
 ]
-dependencies = ["psutil", "pydantic>=2.0"]
+dependencies = [
+    "psutil",
+    "pydantic>=2.0",
+    "textual"
+    ]
 
 [project.urls]
 Homepage = "https://github.com/stefanwebb/named-pipes"
