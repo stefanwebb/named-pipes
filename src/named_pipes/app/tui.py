@@ -532,6 +532,7 @@ class TuiApp(App):
         border-right: none;
         border-bottom: none;
         margin-left: 0;
+        padding-right: 0;
     }
     .output-col {
         border: round $primary;
