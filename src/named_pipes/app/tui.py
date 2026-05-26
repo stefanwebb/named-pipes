@@ -198,13 +198,14 @@ class _VerticalSeparator(Widget):
         char = "│"
         try:
             my_y = self.region.y
-            junctions: set[int] = set()
-            for pid in self._panel_ids:
-                r = self.app.query_one(f"#{pid}").region
-                junctions.add(r.y - my_y)
-                junctions.add(r.y + r.height - 1 - my_y)
-            if y in junctions:
-                char = "┼"
+            tops = sorted(
+                self.app.query_one(f"#{pid}").region.y - my_y
+                for pid in self._panel_ids
+            )
+            if y == tops[0]:
+                char = "┬"
+            elif y in tops[1:]:
+                char = "├"
         except Exception:
             pass
         return Strip([Segment(char, style)])
@@ -519,6 +520,7 @@ class TuiApp(App):
         margin-right: 0;
         border-right: none;
         border-left: none;
+        border-bottom: none;
     }
     .right-split {
         width: 2fr;
@@ -540,6 +542,7 @@ class TuiApp(App):
     .right-split .output-col {
         border-left: none;
         border-right: none;
+        border-bottom: none;
         margin-left: 0;
         height: 3fr;
     }
