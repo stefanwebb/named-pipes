@@ -524,6 +524,7 @@ class TuiApp(App):
         height: 1fr;
         border-left: none;
         border-right: none;
+        border-bottom: none;
         margin-left: 0;
     }
     .output-col {
