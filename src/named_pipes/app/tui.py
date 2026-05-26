@@ -532,12 +532,12 @@ class TuiApp(App):
         padding: 1;
         margin: 1;
         overflow-y: auto;
-        height: 2fr;
     }
     .right-split .output-col {
         border-left: none;
         border-right: none;
         margin-left: 0;
+        height: 2fr;
     }
     """
 
