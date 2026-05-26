@@ -14,6 +14,12 @@ class AutoTextArea(TextArea):
 
     BINDINGS = [Binding("escape", "dismiss_input", "Dismiss textbox", key_display="esc")]
 
+    DEFAULT_CSS = """
+    AutoTextArea {
+        overflow-y: hidden;
+    }
+    """
+
     def _fit_height(self) -> None:
         lines = self.text.count("\n") + 1
         self.styles.height = max(3, lines + 2)
