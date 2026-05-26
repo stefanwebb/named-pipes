@@ -564,13 +564,6 @@ class TuiApp(App):
                     yield Label("No tools running.", id="messenger-empty")
                     with Vertical(id="messenger-controls"):
                         with Horizontal(classes="field-row"):
-                            yield Label("tool:")
-                            yield Select(
-                                [("", "")],
-                                allow_blank=False,
-                                id="messenger-tool",
-                            )
-                        with Horizontal(classes="field-row"):
                             yield Label("command:")
                             yield Select(
                                 [(c, c) for c in _MESSENGER_COMMANDS],
@@ -698,21 +691,18 @@ class TuiApp(App):
             self.query_one(f"#{tid}", _ToolsTable).display = has_any
 
         running_names = [name for name, healthy, _, _ in statuses if healthy]
-        messenger_select = self.query_one("#messenger-tool", Select)
         has_tools = bool(running_names)
         self.query_one("#messenger-empty", Label).display = not has_tools
         self.query_one("#messenger-controls", Vertical).display = has_tools
         if not has_tools:
             self._stop_log_watch.set()
             self.query_one("#tools-stdout", RichLog).clear()
+            self._active_messenger_tool = None
         if has_tools:
-            options = [(n, n) for n in running_names]
-            current_val = messenger_select.value
-            new_val = current_val if any(v == current_val for _, v in options) else running_names[0]
-            messenger_select.set_options(options)
-            messenger_select.value = new_val
-            if new_val != self._watched_tool or self._stop_log_watch.is_set():
-                self._start_log_watcher(new_val)
+            if self._active_messenger_tool not in running_names:
+                self._set_active_tool(running_names[0])
+            elif self._stop_log_watch.is_set():
+                self._start_log_watcher(self._active_messenger_tool)
 
 
     def _commands_for_tool(self, tool_name: str) -> list[dict]:
@@ -777,12 +767,22 @@ class TuiApp(App):
                 )
             )
 
+    def _set_active_tool(self, name: str) -> None:
+        self._save_current_args()
+        self._active_messenger_tool = name
+        self._active_messenger_cmd = None
+        for n, mc in self._managed_clients.items():
+            mc.on_event = self._make_event_callback() if n == name else None
+        self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
+        self._refresh_messenger_commands(name)
+        if name != self._watched_tool:
+            self._start_log_watcher(name)
+
     @on(_ToolsTable.RowClicked)
     def on_tools_row_clicked(self, event: _ToolsTable.RowClicked) -> None:
         name = str(event.row_key.value)
-        messenger_select = self.query_one("#messenger-tool", Select)
         if name in self._managed_clients:
-            messenger_select.value = name
+            self._set_active_tool(name)
         for table in self.query(_ToolsTable):
             table.show_cursor = False
 
@@ -846,19 +846,6 @@ class TuiApp(App):
 
         threading.Thread(target=_watch, daemon=True).start()
 
-    @on(Select.Changed, "#messenger-tool")
-    def on_messenger_tool_changed(self, event: Select.Changed) -> None:
-        self._save_current_args()
-        name = str(event.value)
-        self._active_messenger_tool = name
-        self._active_messenger_cmd = None  # prevent stale save during command refresh
-        for n, mc in self._managed_clients.items():
-            mc.on_event = self._make_event_callback() if n == name else None
-        self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
-        self._refresh_messenger_commands(name)
-        if name != self._watched_tool:
-            self._start_log_watcher(name)
-
     @on(Select.Changed, "#messenger-cmd")
     def on_messenger_cmd_changed(self, event: Select.Changed) -> None:
         self._save_current_args()
@@ -882,8 +869,10 @@ class TuiApp(App):
     @on(Button.Pressed, "#messenger-send")
     def on_messenger_send(self) -> None:
         self._save_current_args()
-        tool = str(self.query_one("#messenger-tool", Select).value)
+        tool = self._active_messenger_tool
         cmd = str(self.query_one("#messenger-cmd", Select).value)
+        if not tool:
+            return
         mc = self._managed_clients.get(tool)
         if mc is None:
             self.notify(f"Tool '{tool}' not connected", severity="error")
