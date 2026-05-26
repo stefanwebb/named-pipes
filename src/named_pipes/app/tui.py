@@ -521,7 +521,7 @@ class TuiApp(App):
         height: 100%;
     }
     .right-split .system-col {
-        height: 1fr;
+        height: 2fr;
         border-left: none;
         border-right: none;
         border-bottom: none;
@@ -537,7 +537,7 @@ class TuiApp(App):
         border-left: none;
         border-right: none;
         margin-left: 0;
-        height: 2fr;
+        height: 3fr;
     }
     """
 
