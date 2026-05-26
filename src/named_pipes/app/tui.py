@@ -23,6 +23,7 @@ from named_pipes.utils import _is_fifo_connected, scan_pipes
 from named_pipes.app.widgets import AutoTextArea
 from textual.app import App, ComposeResult, on
 from textual.binding import Binding
+from textual.screen import ModalScreen
 from textual.widgets import (
     Button,
     DataTable,
@@ -175,6 +176,38 @@ class _ManagedClient:
             pass
 
 
+class InfoModal(ModalScreen):
+    BINDINGS = [Binding("escape", "dismiss", "Close"), Binding("i", "dismiss", "Close")]
+
+    CSS = """
+    InfoModal {
+        align: center middle;
+    }
+    InfoModal > Vertical {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        border: round $primary;
+        padding: 1 2;
+        background: $surface;
+    }
+    """
+
+    def __init__(self, info):
+        super().__init__()
+        self._info = info
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label("[bold]Hardware[/bold]", markup=True)
+            yield Rule()
+            yield Label(self._info.hardware_str())
+            yield Label("")
+            yield Label("[bold]Libraries[/bold]", markup=True)
+            yield Rule()
+            yield Label(self._info.libraries_str())
+
+
 def _reg_backend(backend: Backend) -> RegBackend | None:
     try:
         return RegBackend[backend.name]
@@ -242,11 +275,11 @@ class TuiApp(App):
         Binding("q", "quit", "Quit"),
         Binding("1", "switch_tab('tab-tools')", "Tools"),
         Binding("2", "switch_tab('tab-launcher')", "Launch"),
-        Binding("3", "switch_tab('tab-info')", "Info"),
+        Binding("i", "show_info", "Info"),
     ]
 
     def compose(self) -> ComposeResult:
-        info = get_system_info()
+        self._system_info = get_system_info()
         yield Header()
         with TabbedContent(initial="tab-launcher", id="outer-tabs"):
             with TabPane("Tools", id="tab-tools"):
@@ -374,16 +407,6 @@ class TuiApp(App):
 
                         with Vertical(classes="output-col") as launcher_output:
                             launcher_output.border_title = "stdout"
-            with TabPane("Info", id="tab-info"):
-                with Vertical(classes="system-col") as info_col:
-                    info_col.border_title = "Info"
-                    yield Label("[bold]Hardware[/bold]", markup=True)
-                    yield Rule()
-                    yield Label(info.hardware_str())
-                    yield Label("")
-                    yield Label("[bold]Libraries[/bold]", markup=True)
-                    yield Rule()
-                    yield Label(info.libraries_str())
         yield Footer()
 
     _TABLE_IDS = ["tools-table", "tools-table-launcher"]
@@ -835,6 +858,9 @@ class TuiApp(App):
             stderr=log,
         )
         self.notify(f"Launched STT server '{name}' — log: {log_path}")
+
+    def action_show_info(self) -> None:
+        self.push_screen(InfoModal(self._system_info))
 
     def action_switch_tab(self, tab_id: str) -> None:
         self.query_one("#outer-tabs", TabbedContent).active = tab_id
