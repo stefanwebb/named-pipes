@@ -539,6 +539,9 @@ class TuiApp(App):
         margin: 1;
         overflow-y: auto;
     }
+    #tools-stdout {
+        scrollbar-size-vertical: 1;
+    }
     .right-split .output-col {
         border-left: none;
         border-right: none;
