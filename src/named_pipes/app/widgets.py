@@ -14,18 +14,13 @@ class AutoTextArea(TextArea):
 
     BINDINGS = [Binding("escape", "dismiss_input", "Dismiss textbox", key_display="esc")]
 
-    DEFAULT_CSS = """
-    AutoTextArea {
-        overflow-y: hidden;
-    }
-    """
-
     def _fit_height(self) -> None:
         lines = self.text.count("\n") + 1
         self.styles.height = max(3, lines + 2)
 
     def on_mount(self) -> None:
         self._fit_height()
+        self.styles.scrollbar_size_vertical = 0
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self._fit_height()

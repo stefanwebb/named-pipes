@@ -543,6 +543,9 @@ class TuiApp(App):
     #tools-stdout, #commands-panel {
         scrollbar-size-vertical: 1;
     }
+    AutoTextArea {
+        scrollbar-size-vertical: 0;
+    }
     .right-split .output-col {
         border-left: none;
         border-right: none;
