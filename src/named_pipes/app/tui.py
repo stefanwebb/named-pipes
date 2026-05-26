@@ -545,7 +545,7 @@ class TuiApp(App):
         border-bottom: none;
         margin-left: 0;
         height: 3fr;
-        padding: 1 0 0 0;
+        padding: 0;
     }
     """
 
