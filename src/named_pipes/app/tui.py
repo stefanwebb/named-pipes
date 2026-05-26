@@ -204,7 +204,7 @@ class _VerticalSeparator(Widget):
                 junctions.add(r.y - my_y)
                 junctions.add(r.y + r.height - 1 - my_y)
             if y in junctions:
-                char = "├"
+                char = "┼"
         except Exception:
             pass
         return Strip([Segment(char, style)])
@@ -514,6 +514,7 @@ class TuiApp(App):
         height: 100%;
         margin-right: 0;
         border-right: none;
+        border-left: none;
     }
     .right-split {
         width: 2fr;
@@ -522,6 +523,7 @@ class TuiApp(App):
     .right-split .system-col {
         height: 1fr;
         border-left: none;
+        border-right: none;
         margin-left: 0;
     }
     .output-col {
@@ -533,6 +535,7 @@ class TuiApp(App):
     }
     .right-split .output-col {
         border-left: none;
+        border-right: none;
         margin-left: 0;
     }
     """
