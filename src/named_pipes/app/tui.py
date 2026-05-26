@@ -491,11 +491,12 @@ class TuiApp(App):
     .field-row {
         height: auto;
         margin-bottom: 1;
-        align: left middle;
+        align: left top;
     }
     .field-row Label {
         width: 20;
         padding-right: 1;
+        padding-top: 1;
     }
     .field-row Input, .field-row Select, .field-row AutoTextArea {
         width: 1fr;
