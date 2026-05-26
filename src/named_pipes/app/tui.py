@@ -506,6 +506,9 @@ class TuiApp(App):
         margin: 1;
         overflow-y: auto;
     }
+    #messenger-controls {
+        height: auto;
+    }
     #messenger-args {
         height: auto;
     }
