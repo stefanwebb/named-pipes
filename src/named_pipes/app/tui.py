@@ -176,6 +176,109 @@ class _ManagedClient:
             pass
 
 
+class LaunchModal(ModalScreen):
+    BINDINGS = [Binding("escape", "dismiss", "Close"), Binding("l", "dismiss", "Close")]
+
+    CSS = """
+    LaunchModal {
+        align: center middle;
+    }
+    LaunchModal > Vertical {
+        width: 72;
+        height: 85%;
+        border: round $primary;
+        padding: 1 2;
+        background: $surface;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            with TabbedContent(initial="launcher-chat"):
+                with TabPane("Chat", id="launcher-chat"):
+                    with VerticalScroll():
+                        with Horizontal(classes="field-row"):
+                            yield Label("name:")
+                            yield _Input(value=ChatConfig.model_fields["name"].default, id="chat-name")
+                        with Horizontal(classes="field-row"):
+                            yield Label("model:")
+                            yield Select(
+                                _model_options(Backend.TRANSFORMERS),
+                                value=_default_model(Backend.TRANSFORMERS),
+                                allow_blank=False,
+                                id="chat-model",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("backend:")
+                            yield Select(
+                                [(b.value, b) for b in Backend],
+                                value=ChatConfig.model_fields["backend"].default,
+                                allow_blank=False,
+                                id="chat-backend",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("description:")
+                            yield _Input(value=ChatConfig.model_fields["description"].default, id="chat-description")
+                        with Horizontal(classes="field-row"):
+                            yield Label("backend_kwargs:")
+                            yield AutoTextArea(
+                                json.dumps(ChatConfig.model_fields["backend_kwargs"].default, indent=2),
+                                id="backend-kwargs",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("verbose:")
+                            yield Switch(value=ChatConfig.model_fields["verbose"].default, id="chat-verbose")
+                        yield Button("Launch", id="chat-launch", variant="success")
+                with TabPane("Text-to-speech", id="launcher-tts"):
+                    with VerticalScroll():
+                        with Horizontal(classes="field-row"):
+                            yield Label("name:")
+                            yield _Input(value=TTSConfig.model_fields["name"].default, id="tts-name")
+                        with Horizontal(classes="field-row"):
+                            yield Label("description:")
+                            yield _Input(value=TTSConfig.model_fields["description"].default, id="tts-description")
+                        with Horizontal(classes="field-row"):
+                            yield Label("model_id:")
+                            yield _Input(value=TTSConfig.model_fields["model_id"].default, id="tts-model-id")
+                        with Horizontal(classes="field-row"):
+                            yield Label("voice:")
+                            yield _Input(value=TTSConfig.model_fields["voice"].default, id="tts-voice")
+                        with Horizontal(classes="field-row"):
+                            yield Label("sample_rate:")
+                            yield _Input(value=str(TTSConfig.model_fields["sample_rate"].default), id="tts-sample-rate")
+                        with Horizontal(classes="field-row"):
+                            yield Label("blocksize:")
+                            yield _Input(value=str(TTSConfig.model_fields["blocksize"].default), id="tts-blocksize")
+                        with Horizontal(classes="field-row"):
+                            yield Label("verbose:")
+                            yield Switch(value=TTSConfig.model_fields["verbose"].default, id="tts-verbose")
+                        yield Button("Launch", id="tts-launch", variant="success")
+                with TabPane("Speech-to-text", id="launcher-stt"):
+                    with VerticalScroll():
+                        with Horizontal(classes="field-row"):
+                            yield Label("name:")
+                            yield _Input(value=STTConfig.model_fields["name"].default, id="stt-name")
+                        with Horizontal(classes="field-row"):
+                            yield Label("description:")
+                            yield _Input(value=STTConfig.model_fields["description"].default, id="stt-description")
+                        with Horizontal(classes="field-row"):
+                            yield Label("model_path:")
+                            yield _Input(value=STTConfig.model_fields["model_path"].default, id="stt-model-path")
+                        with Horizontal(classes="field-row"):
+                            yield Label("temperature:")
+                            yield _Input(value=str(STTConfig.model_fields["temperature"].default), id="stt-temperature")
+                        with Horizontal(classes="field-row"):
+                            yield Label("vad_onset:")
+                            yield _Input(value=str(STTConfig.model_fields["vad_onset"].default), id="stt-vad-onset")
+                        with Horizontal(classes="field-row"):
+                            yield Label("vad_offset:")
+                            yield _Input(value=str(STTConfig.model_fields["vad_offset"].default), id="stt-vad-offset")
+                        with Horizontal(classes="field-row"):
+                            yield Label("verbose:")
+                            yield Switch(value=STTConfig.model_fields["verbose"].default, id="stt-verbose")
+                        yield Button("Launch", id="stt-launch", variant="success")
+
+
 class InfoModal(ModalScreen):
     BINDINGS = [Binding("escape", "dismiss", "Close"), Binding("i", "dismiss", "Close")]
 
@@ -246,7 +349,7 @@ class TuiApp(App):
     .field-row Input, .field-row Select, .field-row AutoTextArea {
         width: 1fr;
     }
-.system-col {
+    .system-col {
         border: round $primary;
         padding: 1;
         margin: 1;
@@ -255,8 +358,12 @@ class TuiApp(App):
     #messenger-args {
         height: auto;
     }
-    .right-split {
+    #tools-panel {
         width: 1fr;
+        height: 100%;
+    }
+    .right-split {
+        width: 2fr;
         height: 100%;
     }
     .right-split .system-col {
@@ -273,143 +380,45 @@ class TuiApp(App):
 
     BINDINGS = [
         Binding("q", "quit", "Quit"),
-        Binding("1", "switch_tab('tab-tools')", "Tools"),
-        Binding("2", "switch_tab('tab-launcher')", "Launch"),
+        Binding("l", "show_launcher", "Launch"),
         Binding("i", "show_info", "Info"),
     ]
 
     def compose(self) -> ComposeResult:
         self._system_info = get_system_info()
         yield Header()
-        with TabbedContent(initial="tab-launcher", id="outer-tabs"):
-            with TabPane("Tools", id="tab-tools"):
-                with Horizontal():
-                    with Vertical(classes="system-col") as tools_left:
-                        tools_left.border_title = "Commands"
-                        yield Label("No tools running.", id="messenger-empty")
-                        with Vertical(id="messenger-controls"):
-                            with Horizontal(classes="field-row"):
-                                yield Label("tool:")
-                                yield Select(
-                                    [("", "")],
-                                    allow_blank=False,
-                                    id="messenger-tool",
-                                )
-                            with Horizontal(classes="field-row"):
-                                yield Label("command:")
-                                yield Select(
-                                    [(c, c) for c in _MESSENGER_COMMANDS],
-                                    allow_blank=False,
-                                    id="messenger-cmd",
-                                )
-                            with Vertical(id="messenger-args"):
-                                pass
-                            yield Button("Send", id="messenger-send", variant="primary")
-                    with Vertical(classes="right-split"):
-                        with Vertical(classes="system-col") as tools_right:
-                            tools_right.border_title = "Tools"
-                            yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
-
-                        with Vertical(classes="output-col") as tools_output:
-                            tools_output.border_title = "stdout"
-                            yield RichLog(id="tools-stdout", markup=False, highlight=False, max_lines=1000)
-            with TabPane("Launch", id="tab-launcher"):
-                with Horizontal():
-                    with Vertical(classes="system-col") as launcher_left:
-                        launcher_left.border_title = "Launch"
-                        with TabbedContent(initial="launcher-chat"):
-                            with TabPane("Chat", id="launcher-chat"):
-                                with VerticalScroll():
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("name:")
-                                        yield _Input(value=ChatConfig.model_fields["name"].default, id="chat-name")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("model:")
-                                        yield Select(
-                                            _model_options(Backend.TRANSFORMERS),
-                                            value=_default_model(Backend.TRANSFORMERS),
-                                            allow_blank=False,
-                                            id="chat-model",
-                                        )
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("backend:")
-                                        yield Select(
-                                            [(b.value, b) for b in Backend],
-                                            value=ChatConfig.model_fields["backend"].default,
-                                            allow_blank=False,
-                                            id="chat-backend",
-                                        )
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("description:")
-                                        yield _Input(value=ChatConfig.model_fields["description"].default, id="chat-description")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("backend_kwargs:")
-                                        yield AutoTextArea(
-                                            json.dumps(ChatConfig.model_fields["backend_kwargs"].default, indent=2),
-                                            id="backend-kwargs",
-                                        )
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("verbose:")
-                                        yield Switch(value=ChatConfig.model_fields["verbose"].default, id="chat-verbose")
-                                    yield Button("Launch", id="chat-launch", variant="success")
-                            with TabPane("Text-to-speech", id="launcher-tts"):
-                                with VerticalScroll():
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("name:")
-                                        yield _Input(value=TTSConfig.model_fields["name"].default, id="tts-name")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("description:")
-                                        yield _Input(value=TTSConfig.model_fields["description"].default, id="tts-description")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("model_id:")
-                                        yield _Input(value=TTSConfig.model_fields["model_id"].default, id="tts-model-id")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("voice:")
-                                        yield _Input(value=TTSConfig.model_fields["voice"].default, id="tts-voice")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("sample_rate:")
-                                        yield _Input(value=str(TTSConfig.model_fields["sample_rate"].default), id="tts-sample-rate")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("blocksize:")
-                                        yield _Input(value=str(TTSConfig.model_fields["blocksize"].default), id="tts-blocksize")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("verbose:")
-                                        yield Switch(value=TTSConfig.model_fields["verbose"].default, id="tts-verbose")
-                                    yield Button("Launch", id="tts-launch", variant="success")
-                            with TabPane("Speech-to-text", id="launcher-stt"):
-                                with VerticalScroll():
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("name:")
-                                        yield _Input(value=STTConfig.model_fields["name"].default, id="stt-name")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("description:")
-                                        yield _Input(value=STTConfig.model_fields["description"].default, id="stt-description")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("model_path:")
-                                        yield _Input(value=STTConfig.model_fields["model_path"].default, id="stt-model-path")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("temperature:")
-                                        yield _Input(value=str(STTConfig.model_fields["temperature"].default), id="stt-temperature")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("vad_onset:")
-                                        yield _Input(value=str(STTConfig.model_fields["vad_onset"].default), id="stt-vad-onset")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("vad_offset:")
-                                        yield _Input(value=str(STTConfig.model_fields["vad_offset"].default), id="stt-vad-offset")
-                                    with Horizontal(classes="field-row"):
-                                        yield Label("verbose:")
-                                        yield Switch(value=STTConfig.model_fields["verbose"].default, id="stt-verbose")
-                                    yield Button("Launch", id="stt-launch", variant="success")
-                    with Vertical(classes="right-split"):
-                        with Vertical(classes="system-col") as launcher_right:
-                            launcher_right.border_title = "Tools"
-                            yield _ToolsTable(id="tools-table-launcher", cursor_type="row", show_cursor=False)
-
-                        with Vertical(classes="output-col") as launcher_output:
-                            launcher_output.border_title = "stdout"
+        with Horizontal():
+            with Vertical(classes="system-col", id="tools-panel") as tools_panel:
+                tools_panel.border_title = "Tools"
+                yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
+            with Vertical(classes="right-split"):
+                with Vertical(classes="system-col") as commands_panel:
+                    commands_panel.border_title = "Commands"
+                    yield Label("No tools running.", id="messenger-empty")
+                    with Vertical(id="messenger-controls"):
+                        with Horizontal(classes="field-row"):
+                            yield Label("tool:")
+                            yield Select(
+                                [("", "")],
+                                allow_blank=False,
+                                id="messenger-tool",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("command:")
+                            yield Select(
+                                [(c, c) for c in _MESSENGER_COMMANDS],
+                                allow_blank=False,
+                                id="messenger-cmd",
+                            )
+                        with Vertical(id="messenger-args"):
+                            pass
+                        yield Button("Send", id="messenger-send", variant="primary")
+                with Vertical(classes="output-col") as stdout_panel:
+                    stdout_panel.border_title = "stdout"
+                    yield RichLog(id="tools-stdout", markup=False, highlight=False, max_lines=1000)
         yield Footer()
 
-    _TABLE_IDS = ["tools-table", "tools-table-launcher"]
+    _TABLE_IDS = ["tools-table"]
 
     def on_mount(self) -> None:
         self._chat_backend: Backend = Backend.TRANSFORMERS
@@ -421,7 +430,6 @@ class TuiApp(App):
         self._active_messenger_cmd: str | None = None
         self._interfaces: dict[str, dict] = {}
         self._arg_cache: dict[str, dict[str, dict[str, str]]] = {}
-        self._had_any_tools: bool = False
         self._watched_tool: str | None = None
 
         for tid in self._TABLE_IDS:
@@ -526,17 +534,11 @@ class TuiApp(App):
         running_names = [name for name, healthy, _, _ in statuses if healthy]
         messenger_select = self.query_one("#messenger-tool", Select)
         has_tools = bool(running_names)
-        had_tools = self.query_one("#messenger-controls", Vertical).display
         self.query_one("#messenger-empty", Label).display = not has_tools
         self.query_one("#messenger-controls", Vertical).display = has_tools
-        if has_tools and not had_tools:
-            self.query_one("#outer-tabs", TabbedContent).active = "tab-tools"
         if not has_tools:
             self._stop_log_watch.set()
             self.query_one("#tools-stdout", RichLog).clear()
-        if not has_any and self._had_any_tools:
-            self.query_one("#outer-tabs", TabbedContent).active = "tab-launcher"
-        self._had_any_tools = has_any
         if has_tools:
             options = [(n, n) for n in running_names]
             current_val = messenger_select.value
@@ -615,7 +617,6 @@ class TuiApp(App):
         messenger_select = self.query_one("#messenger-tool", Select)
         if name in self._managed_clients:
             messenger_select.value = name
-        self.query_one("#outer-tabs", TabbedContent).active = "tab-tools"
         for table in self.query(_ToolsTable):
             table.show_cursor = False
 
@@ -859,11 +860,11 @@ class TuiApp(App):
         )
         self.notify(f"Launched STT server '{name}' — log: {log_path}")
 
+    def action_show_launcher(self) -> None:
+        self.push_screen(LaunchModal())
+
     def action_show_info(self) -> None:
         self.push_screen(InfoModal(self._system_info))
-
-    def action_switch_tab(self, tab_id: str) -> None:
-        self.query_one("#outer-tabs", TabbedContent).active = tab_id
 
 
 if __name__ == "__main__":
