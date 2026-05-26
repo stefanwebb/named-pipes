@@ -556,7 +556,7 @@ class TuiApp(App):
                 yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
             yield _VerticalSeparator("commands-panel", "stdout-panel")
             with Vertical(classes="right-split"):
-                with Vertical(classes="system-col", id="commands-panel") as commands_panel:
+                with VerticalScroll(classes="system-col", id="commands-panel") as commands_panel:
                     commands_panel.border_title = "Commands"
                     yield Label("No tools running.", id="messenger-empty")
                     with Vertical(id="messenger-controls"):
