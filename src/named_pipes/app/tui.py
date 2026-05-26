@@ -478,7 +478,7 @@ class TuiApp(App):
     #tools-panel {
         width: 1fr;
         height: 100%;
-        border-left: none;
+        border-right: none;
     }
     .right-split {
         width: 2fr;
