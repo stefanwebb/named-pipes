@@ -478,7 +478,7 @@ class TuiApp(App):
     #tools-panel {
         width: 1fr;
         height: 100%;
-        border-right: none;
+        margin-right: 0;
     }
     .right-split {
         width: 2fr;
@@ -486,6 +486,8 @@ class TuiApp(App):
     }
     .right-split .system-col {
         height: 1fr;
+        border-left: none;
+        margin-left: 0;
     }
     .output-col {
         border: round $primary;
@@ -493,6 +495,10 @@ class TuiApp(App):
         margin: 1;
         overflow-y: auto;
         height: 2fr;
+    }
+    .right-split .output-col {
+        border-left: none;
+        margin-left: 0;
     }
     """
 
