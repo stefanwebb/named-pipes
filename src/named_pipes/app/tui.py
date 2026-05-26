@@ -540,7 +540,7 @@ class TuiApp(App):
         margin: 1;
         overflow-y: auto;
     }
-    #tools-stdout {
+    #tools-stdout, #commands-panel {
         scrollbar-size-vertical: 1;
     }
     .right-split .output-col {
