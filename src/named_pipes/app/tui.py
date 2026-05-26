@@ -192,6 +192,123 @@ class LaunchModal(ModalScreen):
     }
     """
 
+    def on_mount(self) -> None:
+        self._chat_backend: Backend = Backend.TRANSFORMERS
+
+    @on(Select.Changed, "#chat-backend")
+    def on_chat_backend_changed(self, event: Select.Changed) -> None:
+        backend: Backend = event.value
+        options = _model_options(backend)
+        if not options:
+            self.app.notify(f"No models registered for {backend.value}", severity="error")
+            self.query_one("#chat-backend", Select).value = self._chat_backend
+            return
+        self._chat_backend = backend
+        model_select = self.query_one("#chat-model", Select)
+        current = model_select.value
+        model_select.set_options(options)
+        if not any(v == current for _, v in options):
+            model_select.value = _default_model(backend) or Select.BLANK
+
+    @on(Button.Pressed, "#chat-launch")
+    def on_chat_launch(self) -> None:
+        name = self.query_one("#chat-name", Input).value.strip()
+        pipe_path = f"/tmp/tool-{name}"
+        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
+            self.app.notify(f"Tool '{name}' is already running", severity="error")
+            return
+        backend = self.query_one("#chat-backend", Select).value
+        model = self.query_one("#chat-model", Select).value
+        description = self.query_one("#chat-description", Input).value.strip()
+        verbose = self.query_one("#chat-verbose", Switch).value
+        try:
+            backend_kwargs = json.loads(self.query_one("#backend-kwargs", AutoTextArea).text)
+        except json.JSONDecodeError:
+            self.app.notify("backend_kwargs is not valid JSON", severity="error")
+            return
+        config = {
+            "name": name,
+            "model": model,
+            "backend": backend.value,
+            "description": description,
+            "backend_kwargs": backend_kwargs,
+            "verbose": verbose,
+        }
+        log_path = f"/tmp/tool-{name}.log"
+        log = open(log_path, "w")
+        subprocess.Popen(
+            [sys.executable, "-m", "named_pipes.chat.launch", json.dumps(config)],
+            start_new_session=True,
+            stdout=log,
+            stderr=log,
+        )
+        self.app.notify(f"Launched chat server '{name}' — log: {log_path}")
+
+    @on(Button.Pressed, "#tts-launch")
+    def on_tts_launch(self) -> None:
+        name = self.query_one("#tts-name", Input).value.strip()
+        pipe_path = f"/tmp/tool-{name}"
+        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
+            self.app.notify(f"Tool '{name}' is already running", severity="error")
+            return
+        try:
+            sample_rate = int(self.query_one("#tts-sample-rate", Input).value.strip())
+            blocksize = int(self.query_one("#tts-blocksize", Input).value.strip())
+        except ValueError:
+            self.app.notify("sample_rate and blocksize must be integers", severity="error")
+            return
+        config = {
+            "name": name,
+            "description": self.query_one("#tts-description", Input).value.strip(),
+            "model_id": self.query_one("#tts-model-id", Input).value.strip(),
+            "voice": self.query_one("#tts-voice", Input).value.strip(),
+            "sample_rate": sample_rate,
+            "blocksize": blocksize,
+            "verbose": self.query_one("#tts-verbose", Switch).value,
+        }
+        log_path = f"/tmp/tool-{name}.log"
+        log = open(log_path, "w")
+        subprocess.Popen(
+            [sys.executable, "-m", "named_pipes.tts.launch", json.dumps(config)],
+            start_new_session=True,
+            stdout=log,
+            stderr=log,
+        )
+        self.app.notify(f"Launched TTS server '{name}' — log: {log_path}")
+
+    @on(Button.Pressed, "#stt-launch")
+    def on_stt_launch(self) -> None:
+        name = self.query_one("#stt-name", Input).value.strip()
+        pipe_path = f"/tmp/tool-{name}"
+        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
+            self.app.notify(f"Tool '{name}' is already running", severity="error")
+            return
+        try:
+            temperature = float(self.query_one("#stt-temperature", Input).value.strip())
+            vad_onset = int(self.query_one("#stt-vad-onset", Input).value.strip())
+            vad_offset = int(self.query_one("#stt-vad-offset", Input).value.strip())
+        except ValueError:
+            self.app.notify("temperature must be a float; vad_onset and vad_offset must be integers", severity="error")
+            return
+        config = {
+            "name": name,
+            "description": self.query_one("#stt-description", Input).value.strip(),
+            "model_path": self.query_one("#stt-model-path", Input).value.strip(),
+            "temperature": temperature,
+            "vad_onset": vad_onset,
+            "vad_offset": vad_offset,
+            "verbose": self.query_one("#stt-verbose", Switch).value,
+        }
+        log_path = f"/tmp/tool-{name}.log"
+        log = open(log_path, "w")
+        subprocess.Popen(
+            [sys.executable, "-m", "named_pipes.stt.launch", json.dumps(config)],
+            start_new_session=True,
+            stdout=log,
+            stderr=log,
+        )
+        self.app.notify(f"Launched STT server '{name}' — log: {log_path}")
+
     def compose(self) -> ComposeResult:
         with Vertical():
             with TabbedContent(initial="launcher-chat"):
@@ -421,7 +538,6 @@ class TuiApp(App):
     _TABLE_IDS = ["tools-table"]
 
     def on_mount(self) -> None:
-        self._chat_backend: Backend = Backend.TRANSFORMERS
         self._managed_clients: dict[str, _ManagedClient] = {}
         self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
@@ -738,127 +854,6 @@ class TuiApp(App):
             else:
                 kwargs[arg_name] = ta.text
         mc.send_command(cmd, **kwargs)
-
-    @on(Select.Changed, "#chat-backend")
-    def on_chat_backend_changed(self, event: Select.Changed) -> None:
-        backend: Backend = event.value
-        options = _model_options(backend)
-        if not options:
-            self.notify(f"No models registered for {backend.value}", severity="error")
-            self.query_one("#chat-backend", Select).value = self._chat_backend
-            return
-        self._chat_backend = backend
-        model_select = self.query_one("#chat-model", Select)
-        current = model_select.value
-        model_select.set_options(options)
-        if not any(v == current for _, v in options):
-            model_select.value = _default_model(backend) or Select.BLANK
-
-    @on(Button.Pressed, "#chat-launch")
-    def on_chat_launch(self) -> None:
-        name = self.query_one("#chat-name", Input).value.strip()
-        pipe_path = f"/tmp/tool-{name}"
-        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
-            self.notify(f"Tool '{name}' is already running", severity="error")
-            return
-
-        backend = self.query_one("#chat-backend", Select).value
-        model = self.query_one("#chat-model", Select).value
-        description = self.query_one("#chat-description", Input).value.strip()
-        verbose = self.query_one("#chat-verbose", Switch).value
-
-        try:
-            backend_kwargs = json.loads(self.query_one("#backend-kwargs", AutoTextArea).text)
-        except json.JSONDecodeError:
-            self.notify("backend_kwargs is not valid JSON", severity="error")
-            return
-
-        config = {
-            "name": name,
-            "model": model,
-            "backend": backend.value,
-            "description": description,
-            "backend_kwargs": backend_kwargs,
-            "verbose": verbose,
-        }
-        log_path = f"/tmp/tool-{name}.log"
-        log = open(log_path, "w")
-        subprocess.Popen(
-            [sys.executable, "-m", "named_pipes.chat.launch", json.dumps(config)],
-            start_new_session=True,
-            stdout=log,
-            stderr=log,
-        )
-        self.notify(f"Launched chat server '{name}' — log: {log_path}")
-
-    @on(Button.Pressed, "#tts-launch")
-    def on_tts_launch(self) -> None:
-        name = self.query_one("#tts-name", Input).value.strip()
-        pipe_path = f"/tmp/tool-{name}"
-        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
-            self.notify(f"Tool '{name}' is already running", severity="error")
-            return
-
-        try:
-            sample_rate = int(self.query_one("#tts-sample-rate", Input).value.strip())
-            blocksize = int(self.query_one("#tts-blocksize", Input).value.strip())
-        except ValueError:
-            self.notify("sample_rate and blocksize must be integers", severity="error")
-            return
-
-        config = {
-            "name": name,
-            "description": self.query_one("#tts-description", Input).value.strip(),
-            "model_id": self.query_one("#tts-model-id", Input).value.strip(),
-            "voice": self.query_one("#tts-voice", Input).value.strip(),
-            "sample_rate": sample_rate,
-            "blocksize": blocksize,
-            "verbose": self.query_one("#tts-verbose", Switch).value,
-        }
-        log_path = f"/tmp/tool-{name}.log"
-        log = open(log_path, "w")
-        subprocess.Popen(
-            [sys.executable, "-m", "named_pipes.tts.launch", json.dumps(config)],
-            start_new_session=True,
-            stdout=log,
-            stderr=log,
-        )
-        self.notify(f"Launched TTS server '{name}' — log: {log_path}")
-
-    @on(Button.Pressed, "#stt-launch")
-    def on_stt_launch(self) -> None:
-        name = self.query_one("#stt-name", Input).value.strip()
-        pipe_path = f"/tmp/tool-{name}"
-        if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
-            self.notify(f"Tool '{name}' is already running", severity="error")
-            return
-
-        try:
-            temperature = float(self.query_one("#stt-temperature", Input).value.strip())
-            vad_onset = int(self.query_one("#stt-vad-onset", Input).value.strip())
-            vad_offset = int(self.query_one("#stt-vad-offset", Input).value.strip())
-        except ValueError:
-            self.notify("temperature must be a float; vad_onset and vad_offset must be integers", severity="error")
-            return
-
-        config = {
-            "name": name,
-            "description": self.query_one("#stt-description", Input).value.strip(),
-            "model_path": self.query_one("#stt-model-path", Input).value.strip(),
-            "temperature": temperature,
-            "vad_onset": vad_onset,
-            "vad_offset": vad_offset,
-            "verbose": self.query_one("#stt-verbose", Switch).value,
-        }
-        log_path = f"/tmp/tool-{name}.log"
-        log = open(log_path, "w")
-        subprocess.Popen(
-            [sys.executable, "-m", "named_pipes.stt.launch", json.dumps(config)],
-            start_new_session=True,
-            stdout=log,
-            stderr=log,
-        )
-        self.notify(f"Launched STT server '{name}' — log: {log_path}")
 
     def action_show_launcher(self) -> None:
         self.push_screen(LaunchModal())
