@@ -278,6 +278,7 @@ class LaunchModal(ModalScreen):
             stderr=log,
         )
         self.app.notify(f"Launched chat server '{name}' — log: {log_path}")
+        self.dismiss()
 
     @on(Button.Pressed, "#tts-launch")
     def on_tts_launch(self) -> None:
@@ -310,6 +311,7 @@ class LaunchModal(ModalScreen):
             stderr=log,
         )
         self.app.notify(f"Launched TTS server '{name}' — log: {log_path}")
+        self.dismiss()
 
     @on(Button.Pressed, "#stt-launch")
     def on_stt_launch(self) -> None:
@@ -343,6 +345,7 @@ class LaunchModal(ModalScreen):
             stderr=log,
         )
         self.app.notify(f"Launched STT server '{name}' — log: {log_path}")
+        self.dismiss()
 
     def compose(self) -> ComposeResult:
         with Vertical():
