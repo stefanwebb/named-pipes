@@ -502,9 +502,9 @@ class TuiApp(App):
         border-bottom: none;
     }
     #tool-info-panel {
-        height: auto;
+        height: 1fr;
         padding: 0;
-        margin-bottom: 1;
+        margin-top: 1;
     }
     #tool-info-name {
         text-style: bold;
@@ -514,7 +514,8 @@ class TuiApp(App):
         width: 100%;
     }
     #tools-list {
-        height: 1fr;
+        height: auto;
+        max-height: 50%;
         border: none;
         padding: 0;
         background: transparent;
@@ -526,10 +527,10 @@ class TuiApp(App):
         background: transparent;
         width: 100%;
     }
-    #tools-list > ListItem.--highlight {
+    #tools-list > ListItem.active-tool {
         background: $primary 50%;
     }
-    #tools-list > ListItem.--highlight > Label {
+    #tools-list > ListItem.active-tool > Label {
         background: transparent;
         color: $text;
         text-style: bold;
@@ -557,10 +558,11 @@ class TuiApp(App):
         padding-left: 1;
     }
     #tools-stdout {
-        padding-right: 1;
     }
     #stdout-panel {
         overflow: hidden hidden;
+        padding-left: 1;
+        padding-right: 1;
     }
 
     .right-split .output-col {
@@ -585,11 +587,11 @@ class TuiApp(App):
         with Horizontal():
             with Vertical(classes="system-col", id="tools-panel") as tools_panel:
                 tools_panel.border_title = "Tools"
+                yield ListView(id="tools-list")
+                yield Rule()
                 with Vertical(id="tool-info-panel"):
                     yield Label("No tool selected", id="tool-info-name", markup=True)
                     yield Label("", id="tool-info-desc", markup=True)
-                yield Rule()
-                yield ListView(id="tools-list")
             yield _VerticalSeparator("commands-panel", "stdout-panel")
             with Vertical(classes="right-split"):
                 with Vertical(classes="system-col", id="commands-panel") as commands_panel:
@@ -733,6 +735,7 @@ class TuiApp(App):
             elif self._stop_log_watch.is_set():
                 self._start_log_watcher(self._active_messenger_tool)
 
+        self._apply_active_tool_class()
         self._update_tool_info()
 
     def _update_tool_info(self) -> None:
@@ -812,6 +815,11 @@ class TuiApp(App):
                 )
             )
 
+    def _apply_active_tool_class(self) -> None:
+        active = self._active_messenger_tool
+        for item in self.query_one("#tools-list", ListView).query(ListItem):
+            item.set_class(item.name == active, "active-tool")
+
     def _set_active_tool(self, name: str) -> None:
         self._save_current_args()
         self._active_messenger_tool = name
@@ -822,6 +830,7 @@ class TuiApp(App):
         self._refresh_messenger_commands(name)
         if name != self._watched_tool:
             self._start_log_watcher(name)
+        self._apply_active_tool_class()
         self._update_tool_info()
 
     @on(ListView.Highlighted, "#tools-list")
