@@ -16,7 +16,7 @@ class AutoTextArea(TextArea):
 
     def _fit_height(self) -> None:
         lines = self.text.count("\n") + 1
-        self.styles.height = max(3, lines + 3)
+        self.styles.height = max(3, lines + 2)
 
     def on_mount(self) -> None:
         self._fit_height()

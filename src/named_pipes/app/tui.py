@@ -506,7 +506,6 @@ class TuiApp(App):
         border: round $primary;
         padding: 1;
         margin: 1;
-        overflow-y: auto;
     }
     #messenger-controls {
         height: auto;
@@ -538,10 +537,16 @@ class TuiApp(App):
         border: round $primary;
         padding: 1;
         margin: 1;
-        overflow-y: auto;
     }
-    #tools-stdout, #commands-panel {
-        scrollbar-size-vertical: 1;
+    #commands-panel {
+        overflow-y: auto;
+        padding-right: 1;
+        padding-left: 1;
+    }
+    #tools-stdout {
+    }
+    #stdout-panel {
+        overflow: hidden hidden;
     }
 
     .right-split .output-col {
@@ -569,7 +574,7 @@ class TuiApp(App):
                 yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
             yield _VerticalSeparator("commands-panel", "stdout-panel")
             with Vertical(classes="right-split"):
-                with VerticalScroll(classes="system-col", id="commands-panel") as commands_panel:
+                with Vertical(classes="system-col", id="commands-panel") as commands_panel:
                     commands_panel.border_title = "Commands"
                     yield Label("No tools running.", id="messenger-empty")
                     with Vertical(id="messenger-controls"):
