@@ -102,6 +102,13 @@ REGISTRY: list[ModelEntry] = [
         description="Qwen3 0.6B",
     ),
     ModelEntry(
+        hub_id="HuggingFaceTB/SmolLM-360M-Instruct",
+        servers=[ServerType.CHAT],
+        backends=[Backend.TRANSFORMERS, Backend.VLLM],
+        default=True,
+        description="SmolLM 360M-Instruct",
+    ),
+    ModelEntry(
         hub_id="mlx-community/Kokoro-82M-bf16",
         servers=[ServerType.TTS],
         backends=[Backend.MLX_AUDIO],

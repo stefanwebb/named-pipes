@@ -13,7 +13,6 @@ import threading
 import types
 
 from rich.segment import Segment
-from rich.text import Text
 from named_pipes.chat.server import Backend, ChatConfig
 from named_pipes.tts.server import TTSConfig
 from named_pipes.stt.server import STTConfig
@@ -29,11 +28,12 @@ from textual.strip import Strip
 from textual.widget import Widget
 from textual.widgets import (
     Button,
-    DataTable,
     Footer,
     Header,
     Input,
     Label,
+    ListItem,
+    ListView,
     RichLog,
     Rule,
     Select,
@@ -43,7 +43,6 @@ from textual.widgets import (
     TextArea,
 )
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.message import Message
 
 TOOL_POLL_INTERVAL = 1.0
 
@@ -56,28 +55,6 @@ class _Input(Input):
     def action_dismiss_input(self) -> None:
         self.blur()
 
-
-class _ToolsTable(DataTable):
-    class RowClicked(Message):
-        def __init__(self, row_key) -> None:
-            super().__init__()
-            self.row_key = row_key
-
-    def on_click(self, event) -> None:
-        if self.row_count == 0:
-            return
-        header_height = 1 if self.show_header else 0
-        if event.y < header_height:
-            return
-        self.show_cursor = True
-        self.call_after_refresh(self._post_row_clicked)
-
-    def _post_row_clicked(self) -> None:
-        try:
-            row_key, _ = self.coordinate_to_cell_key(self.cursor_coordinate)
-            self.post_message(self.RowClicked(row_key))
-        except Exception:
-            pass
 
 
 class _ManagedClient:
@@ -524,6 +501,39 @@ class TuiApp(App):
         border-left: none;
         border-bottom: none;
     }
+    #tool-info-panel {
+        height: auto;
+        padding: 0;
+        margin-bottom: 1;
+    }
+    #tool-info-name {
+        text-style: bold;
+    }
+    #tool-info-desc {
+        color: $text-muted;
+        width: 100%;
+    }
+    #tools-list {
+        height: 1fr;
+        border: none;
+        padding: 0;
+        background: transparent;
+    }
+    #tools-list > ListItem {
+        padding: 0 1;
+    }
+    #tools-list > ListItem > Label {
+        background: transparent;
+        width: 100%;
+    }
+    #tools-list > ListItem.--highlight {
+        background: $primary 50%;
+    }
+    #tools-list > ListItem.--highlight > Label {
+        background: transparent;
+        color: $text;
+        text-style: bold;
+    }
     .right-split {
         width: 2fr;
         height: 100%;
@@ -547,6 +557,7 @@ class TuiApp(App):
         padding-left: 1;
     }
     #tools-stdout {
+        padding-right: 1;
     }
     #stdout-panel {
         overflow: hidden hidden;
@@ -574,7 +585,11 @@ class TuiApp(App):
         with Horizontal():
             with Vertical(classes="system-col", id="tools-panel") as tools_panel:
                 tools_panel.border_title = "Tools"
-                yield _ToolsTable(id="tools-table", cursor_type="row", show_cursor=False)
+                with Vertical(id="tool-info-panel"):
+                    yield Label("No tool selected", id="tool-info-name", markup=True)
+                    yield Label("", id="tool-info-desc", markup=True)
+                yield Rule()
+                yield ListView(id="tools-list")
             yield _VerticalSeparator("commands-panel", "stdout-panel")
             with Vertical(classes="right-split"):
                 with Vertical(classes="system-col", id="commands-panel") as commands_panel:
@@ -596,11 +611,8 @@ class TuiApp(App):
                     yield RichLog(id="tools-stdout", markup=False, highlight=False, max_lines=1000)
         yield Footer()
 
-    _TABLE_IDS = ["tools-table"]
-
     def on_mount(self) -> None:
         self._managed_clients: dict[str, _ManagedClient] = {}
-        self._table_rows: dict[str, set[str]] = {tid: set() for tid in self._TABLE_IDS}
         self._stop_polling = threading.Event()
         self._stop_log_watch = threading.Event()
         self._active_messenger_tool: str | None = None
@@ -608,12 +620,6 @@ class TuiApp(App):
         self._interfaces: dict[str, dict] = {}
         self._arg_cache: dict[str, dict[str, dict[str, str]]] = {}
         self._watched_tool: str | None = None
-
-        for tid in self._TABLE_IDS:
-            table = self.query_one(f"#{tid}", _ToolsTable)
-            table.add_column("", key="health", width=14)
-            table.add_column("Name", key="name")
-            table.add_column("Description", key="description")
 
         self.query_one("#messenger-empty", Label).display = True
         self.query_one("#messenger-controls", Vertical).display = False
@@ -673,40 +679,45 @@ class TuiApp(App):
                 healthy, state = False, "error"
             statuses.append((name, healthy, state, mc.description))
 
-        for name in sorted(orphaned_names):
+        for name in orphaned_names:
             statuses.append((name, False, "orphaned", ""))
 
+        statuses.sort(key=lambda s: s[0])
         self.call_from_thread(self._refresh_tool_table, statuses)
 
+    @staticmethod
+    def _tool_list_text(healthy: bool, state: str, name: str) -> str:
+        if not healthy or state == "error":
+            style = "red bold"
+        elif state == "idle":
+            style = "dim"
+        else:
+            style = "green bold"
+        return f"[{style}]● {state:<9}[/{style}] {name}"
+
     def _refresh_tool_table(self, statuses: list[tuple[str, bool, str, str]]) -> None:
-        new_names = {s[0] for s in statuses}
+        list_view = self.query_one("#tools-list", ListView)
+        active = self._active_messenger_tool
 
-        for tid in self._TABLE_IDS:
-            table = self.query_one(f"#{tid}", _ToolsTable)
-            rows = self._table_rows[tid]
+        new_names = [s[0] for s in statuses]
+        cur_items = list(list_view.query(ListItem))
+        cur_names = [item.name for item in cur_items]
 
-            for name in rows - new_names:
-                table.remove_row(name)
-            rows &= new_names
-
-            for name, healthy, state, description in statuses:
-                if not healthy or state == "error":
-                    style = "red bold"
-                elif state == "idle":
-                    style = "grey50 bold"
-                else:
-                    style = "green bold"
-                health = Text(f"● {state}", style=style)
-                if name in rows:
-                    table.update_cell(name, "health", health)
-                    table.update_cell(name, "description", description)
-                else:
-                    table.add_row(health, name, description, key=name)
-                    rows.add(name)
-
-        has_any = bool(statuses)
-        for tid in self._TABLE_IDS:
-            self.query_one(f"#{tid}", _ToolsTable).display = has_any
+        if new_names == cur_names:
+            for item, (name, healthy, state, _description) in zip(cur_items, statuses):
+                item.query_one(Label).update(self._tool_list_text(healthy, state, name))
+        else:
+            prev_index = list_view.index
+            list_view.clear()
+            active_idx: int | None = None
+            for i, (name, healthy, state, _description) in enumerate(statuses):
+                text = self._tool_list_text(healthy, state, name)
+                list_view.append(ListItem(Label(text, markup=True), name=name))
+                if name == active:
+                    active_idx = i
+            target_idx = active_idx if active_idx is not None else prev_index
+            if target_idx is not None and target_idx < len(statuses):
+                list_view.index = target_idx
 
         running_names = [name for name, healthy, _, _ in statuses if healthy]
         has_tools = bool(running_names)
@@ -721,6 +732,22 @@ class TuiApp(App):
                 self._set_active_tool(running_names[0])
             elif self._stop_log_watch.is_set():
                 self._start_log_watcher(self._active_messenger_tool)
+
+        self._update_tool_info()
+
+    def _update_tool_info(self) -> None:
+        name = self._active_messenger_tool
+        name_label = self.query_one("#tool-info-name", Label)
+        desc_label = self.query_one("#tool-info-desc", Label)
+        if name is None:
+            name_label.update("No tool selected")
+            desc_label.update("")
+            return
+        mc = self._managed_clients.get(name)
+        description = mc.description if mc else ""
+        name_label.update(f"[bold]{name}[/bold]")
+        desc_label.update(description)
+
 
 
     def _commands_for_tool(self, tool_name: str) -> list[dict]:
@@ -795,14 +822,15 @@ class TuiApp(App):
         self._refresh_messenger_commands(name)
         if name != self._watched_tool:
             self._start_log_watcher(name)
+        self._update_tool_info()
 
-    @on(_ToolsTable.RowClicked)
-    def on_tools_row_clicked(self, event: _ToolsTable.RowClicked) -> None:
-        name = str(event.row_key.value)
-        if name in self._managed_clients:
+    @on(ListView.Highlighted, "#tools-list")
+    def on_tools_highlighted(self, event: ListView.Highlighted) -> None:
+        if event.item is None:
+            return
+        name = event.item.name
+        if name and name in self._managed_clients:
             self._set_active_tool(name)
-        for table in self.query(_ToolsTable):
-            table.show_cursor = False
 
     def _make_event_callback(self) -> callable:
         def cb(msg: dict) -> None:
