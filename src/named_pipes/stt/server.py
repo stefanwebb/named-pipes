@@ -18,9 +18,15 @@ an input device. Implements the `stt` interface
 import threading
 from enum import Enum
 
+import numpy as np
 import sounddevice as sd
 from pydantic import BaseModel
 
+from named_pipes.stt.alignment import (
+    CoalescingAligner,
+    detect_word_boundary,
+    to_absolute,
+)
 from named_pipes.stt.voxtral.stream import stream_transcribe
 from named_pipes.tools.server import ToolServer, ToolState
 
@@ -44,6 +50,9 @@ class STTConfig(BaseModel):
     vad_onset: int = 2
     vad_offset: int = 32
     device: int | None = None
+    align: bool = False
+    align_language: str = "English"
+    align_model: str = "mlx-community/Qwen3-ForcedAligner-0.6B-4bit"
     verbose: bool = True
 
 
@@ -55,7 +64,7 @@ class STTServer(ToolServer):
     "get_device" / "set_device" are available immediately.
     """
 
-    def __init__(self, config: STTConfig = STTConfig()):
+    def __init__(self, config: STTConfig = STTConfig(), aligner=None):
         super().__init__(config.name, description=config.description)
         self._config = config
         self._device = config.device
@@ -63,6 +72,22 @@ class STTServer(ToolServer):
         self._broadcast_lock = threading.Lock()
         self._stop_event: threading.Event | None = None
         self._worker: threading.Thread | None = None
+
+        # Per-utterance forced-alignment state.
+        self._utt_audio = np.zeros(0, dtype=np.float32)
+        self._utt_abs_start = 0.0
+        self._coalescer = None
+        if config.align:
+            if aligner is None:
+                from named_pipes.stt.aligner import ForcedAligner
+
+                aligner = ForcedAligner(config.align_model, config.align_language)
+            self._aligner = aligner
+            self._coalescer = CoalescingAligner(
+                align_fn=self._aligner.align,
+                emit_fn=self._emit_words,
+                on_error=self._on_align_error,
+            )
 
         self.set_state(STTState.READY)
 
@@ -97,6 +122,7 @@ class STTServer(ToolServer):
                 "on_speaking_started": self._on_start,
                 "on_speaking_finished": self._on_end,
                 "on_ready": self._on_ready,
+                "on_audio": self._on_audio,
                 "stop_event": self._stop_event,
             },
             daemon=True,
@@ -163,22 +189,48 @@ class STTServer(ToolServer):
         self.set_state(STTState.LISTENING)
 
     def _on_token(self, text: str) -> None:
+        if self._coalescer is not None and detect_word_boundary(
+            self._current_text, text
+        ):
+            if self._current_text.strip():
+                self._coalescer.submit(
+                    self._utt_audio.copy(), self._current_text, self._utt_abs_start
+                )
         self._current_text += text
         with self._broadcast_lock:
             self.send_event("token", text=text)
             self.send_event("speech", text=self._current_text)
 
-    def _on_start(self) -> None:
+    def _on_start(self, abs_start: float = 0.0) -> None:
         self._current_text = ""
+        self._utt_audio = np.zeros(0, dtype=np.float32)
+        self._utt_abs_start = abs_start
         self.set_state(STTState.TRANSCRIBING)
         with self._broadcast_lock:
             self.send_event("speech_start")
 
+    def _on_audio(self, chunk) -> None:
+        if self._coalescer is not None:
+            self._utt_audio = np.append(self._utt_audio, chunk)
+
     def _on_end(self) -> None:
         with self._broadcast_lock:
             self.send_event("speech_end")
+        if self._coalescer is not None and self._current_text.strip():
+            self._coalescer.submit(
+                self._utt_audio.copy(), self._current_text, self._utt_abs_start
+            )
         if self._state is STTState.TRANSCRIBING:
             self.set_state(STTState.LISTENING)
+
+    def _emit_words(self, items, text: str, abs_start: float) -> None:
+        words = to_absolute(items, abs_start)
+        with self._broadcast_lock:
+            self.send_event("speech", text=text, words=words)
+
+    def _on_align_error(self, exc: Exception) -> None:
+        if self._config.verbose:
+            print(f"[STT] alignment error: {exc}", flush=True)
 
     # -----------------------------------------------------------------------
     # Cleanup
@@ -187,6 +239,8 @@ class STTServer(ToolServer):
     def _close(self):
         if self._closed:
             return
+        if self._coalescer is not None:
+            self._coalescer.stop()
         if self._stop_event is not None:
             self._stop_event.set()
         if self._worker is not None:
