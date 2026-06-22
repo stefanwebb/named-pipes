@@ -54,6 +54,9 @@ Pydantic model holding server configuration.
 | `vad_offset` | `int` | `32` | Consecutive VAD silence frames before stopping transcription |
 | `device` | `int \| None` | `None` | Initial input device (`None` = host default) |
 | `verbose` | `bool` | `True` | Print loading/status messages to stdout |
+| `align` | `bool` | `False` | Attach per-word forced-alignment timestamps to `speech` events |
+| `align_language` | `str` | `"English"` | Language passed to the forced aligner |
+| `align_model` | `str` | `"mlx-community/Qwen3-ForcedAligner-0.6B-4bit"` | MLX forced-aligner model id |
 
 ---
 
@@ -121,6 +124,28 @@ with ToolClient("stt") as client:
     client.on("speech_end", lambda _: print())
     client.wait()  # block until server stops
 ```
+
+## Per-word timestamps (forced alignment)
+
+Set `align=True` to attach per-word absolute timestamps to `speech` events. The
+server re-aligns the utterance-so-far on each word boundary (coalesced, in a
+background thread) plus once at `speech_end`, using the MLX
+`mlx-community/Qwen3-ForcedAligner-0.6B-4bit` model via `mlx-audio`.
+
+Download the aligner model once:
+
+    hf download mlx-community/Qwen3-ForcedAligner-0.6B-4bit
+
+`speech` events then include a `words` array:
+
+    {"event": "speech", "text": "hello world",
+     "words": [{"word": "hello", "start": 1750540000.080, "end": 1750540000.480},
+               {"word": "world", "start": 1750540000.560, "end": 1750540000.800}]}
+
+`start`/`end` are absolute Unix epoch seconds (millisecond precision). The
+aligner's intrinsic resolution is 80 ms. If alignment is disabled or the model
+is unavailable, `speech` events are emitted without `words` and transcription is
+unaffected.
 
 ## Alternate backend
 

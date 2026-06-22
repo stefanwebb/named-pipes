@@ -71,6 +71,11 @@ def main() -> None:
         @client.on("speech")
         def _(msg):
             printer.overwrite(msg.get("text", ""))
+            words = msg.get("words")
+            if words:
+                printer.newline()
+                for w in words:
+                    print(f"  [{w['start']:.3f}–{w['end']:.3f}] {w['word']}")
 
         @client.on("speech_end")
         def _(msg):
