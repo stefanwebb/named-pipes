@@ -336,6 +336,7 @@ class LaunchModal(ModalScreen):
             "vad_onset": vad_onset,
             "vad_offset": vad_offset,
             "device": device,
+            "align": self.query_one("#stt-align", Switch).value,
             "verbose": self.query_one("#stt-verbose", Switch).value,
         }
         log_path = f"/tmp/tool-{name}.log"
@@ -488,6 +489,12 @@ class LaunchModal(ModalScreen):
                         with Horizontal(classes="field-row"):
                             yield Label("device:")
                             yield _Input(value="", id="stt-device")
+                        with Horizontal(classes="field-row"):
+                            yield Label("align:")
+                            yield Switch(
+                                value=STTConfig.model_fields["align"].default,
+                                id="stt-align",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("verbose:")
                             yield Switch(
