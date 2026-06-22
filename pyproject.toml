@@ -53,7 +53,8 @@ tts = [
 ]
 stt = [
     "sounddevice",
-    "mistral-common"
+    "mistral-common",
+    "moonshine-voice",
 ]
 kokoro = ["misaki[en]"]
 dev = ["pytest", "ruff"]
