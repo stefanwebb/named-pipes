@@ -175,7 +175,7 @@ def _resolve_pipe(pipe: str) -> tuple[str, bool]:
 _SERVE_CHOICES = ("chat", "tts", "stt")
 
 
-def _serve(kind: str, verbose: bool = False) -> None:
+def _serve(kind: str, verbose: bool = False, align: bool = False) -> None:
     """Launch a server with default config and block until interrupted."""
     if kind == "chat":
         from named_pipes.chat import ChatServer, ChatConfig
@@ -190,7 +190,7 @@ def _serve(kind: str, verbose: bool = False) -> None:
     elif kind == "stt":
         from named_pipes.stt import STTServer, STTConfig
 
-        cls = lambda: STTServer(STTConfig(verbose=verbose))
+        cls = lambda: STTServer(STTConfig(verbose=verbose, align=align))
         pipe_path = "/tmp/tool-stt"
     else:
         print(f"cpipe: unknown server type {kind!r}", file=sys.stderr)
@@ -215,6 +215,7 @@ Examples:
   cpipe --serve chat                           start the chat server with defaults
   cpipe --serve tts                            start the TTS server with defaults
   cpipe --serve stt                            start the STT server with defaults
+  cpipe --serve stt --align                    start STT with per-word timestamps
   cpipe --list                                 list tool pipes (tool-*) under /tmp
   cpipe --list /var/tmp                        list tool pipes under /var/tmp
   cpipe --pid                                  list tool pipes with PIDs under /tmp
@@ -308,6 +309,11 @@ Examples:
         help="start a server with default config: chat, tts, or stt",
     )
     parser.add_argument(
+        "--align",
+        action="store_true",
+        help="with --serve stt: attach per-word forced-alignment timestamps to speech events",
+    )
+    parser.add_argument(
         "--list",
         metavar="DIR",
         nargs="?",
@@ -332,7 +338,7 @@ Examples:
 
     # Standalone modes — PIPE and CMD are not required.
     if args.serve is not None:
-        _serve(args.serve, verbose=args.verbose)
+        _serve(args.serve, verbose=args.verbose, align=args.align)
         return
 
     if args.list is not None:
@@ -349,6 +355,7 @@ Examples:
 
     if not args.pipe or not args.cmd:
         from named_pipes.app.tui import TuiApp
+
         TuiApp().run()
         return
 
