@@ -31,3 +31,25 @@ def test_stream_transcribe_source_checks_stop_event():
     src = inspect.getsource(stream_transcribe)
     assert "stop_event" in src
     assert "is_set()" in src
+
+
+def test_stream_transcribe_has_on_audio_kwarg():
+    sig = inspect.signature(stream_transcribe)
+    assert "on_audio" in sig.parameters
+    assert sig.parameters["on_audio"].default is None
+
+
+def test_stream_transcribe_passes_abs_start_to_on_speaking_started():
+    src = inspect.getsource(stream_transcribe)
+    assert "on_speaking_started(abs_start)" in src
+
+
+def test_stream_transcribe_maintains_wall_clock_anchor():
+    src = inspect.getsource(stream_transcribe)
+    assert "inputBufferAdcTime" in src
+    assert "samples_captured" in src
+
+
+def test_stream_transcribe_routes_audio_through_on_audio():
+    src = inspect.getsource(stream_transcribe)
+    assert "on_audio(" in src

@@ -72,10 +72,11 @@ def stream_transcribe(
     vad_onset: int = 2,
     vad_offset: int = 32,
     notify_on_eos: bool = False,
-    on_speaking_started=lambda: print("\non_speaking_started", flush=True),
+    on_speaking_started=lambda abs_start: print("\non_speaking_started", flush=True),
     on_speaking_finished=lambda: print("on_speaking_finished", flush=True),
     on_token: Optional[Callable[[str], None]] = None,
     on_ready: Optional[Callable[[], None]] = None,
+    on_audio: Optional[Callable[[object], None]] = None,
     stop_event: Optional[threading.Event] = None,
     device: Optional[int] = None,
     verbose: bool = True,
@@ -147,10 +148,25 @@ def stream_transcribe(
     lock = threading.Lock()
     audio_buf = np.zeros(0, dtype=np.float32)
 
+    # Wall-clock anchor: map global sample 0 to a wall-clock time so each
+    # captured sample has an absolute timestamp. PortAudio's input latency
+    # (currentTime - inputBufferAdcTime) is subtracted so the anchor is the
+    # time the first sample was captured at the ADC.
+    sr = 16000
+    samples_captured = 0
+    wall0 = None
+
     def callback(indata, frames, time_info, status):
-        nonlocal audio_buf
+        nonlocal audio_buf, samples_captured, wall0
         with lock:
+            if wall0 is None:
+                try:
+                    latency = time_info.currentTime - time_info.inputBufferAdcTime
+                except Exception:
+                    latency = 0.0
+                wall0 = time.time() - latency - samples_captured / sr
             audio_buf = np.append(audio_buf, indata[:, 0])
+            samples_captured += frames
 
     # Decoder state
     cache = None
@@ -177,6 +193,8 @@ def stream_transcribe(
     silence_frame_count = 0
     vad_buf = np.zeros(0, dtype=np.float32)
     pre_roll: collections.deque = collections.deque(maxlen=PRE_ROLL_BLOCKS)
+    pre_roll_starts: collections.deque = collections.deque(maxlen=PRE_ROLL_BLOCKS)
+    global_pos = 0  # number of samples drained from audio_buf so far
 
     def reset_all_state():
         nonlocal audio_tail, conv1_tail, conv2_tail, encoder_cache, ds_buf
@@ -261,6 +279,8 @@ def stream_transcribe(
             with lock:
                 new_audio = audio_buf
                 audio_buf = np.zeros(0, dtype=np.float32)
+            chunk_start = global_pos
+            global_pos += len(new_audio)
 
             # --- VAD ---
             if len(new_audio) > 0:
@@ -276,7 +296,6 @@ def stream_transcribe(
                                 speech_frame_count = 0
                                 silence_frame_count = 0
                                 transition_to_speaking = True
-                                on_speaking_started()
                         else:
                             speech_frame_count = 0
                     else:  # SPEAKING
@@ -292,15 +311,30 @@ def stream_transcribe(
                 # Route audio to pre-roll or pending_audio based on VAD state
                 if vad_state == VADState.WAITING:
                     pre_roll.append(new_audio)
+                    pre_roll_starts.append(chunk_start)
                 else:  # SPEAKING
                     if transition_to_speaking and len(pre_roll) > 0:
+                        utt_first_idx = pre_roll_starts[0]
                         pre_roll_audio = np.concatenate(list(pre_roll))
-                        pending_audio = np.append(
-                            pending_audio, np.concatenate([pre_roll_audio, new_audio])
-                        )
+                        onset_audio = np.concatenate([pre_roll_audio, new_audio])
+                        pending_audio = np.append(pending_audio, onset_audio)
                         pre_roll.clear()
+                        pre_roll_starts.clear()
+                        abs_start = (wall0 or time.time()) + utt_first_idx / sr
+                        on_speaking_started(abs_start)
+                        if on_audio is not None:
+                            on_audio(onset_audio)
+                    elif transition_to_speaking:
+                        utt_first_idx = chunk_start
+                        pending_audio = np.append(pending_audio, new_audio)
+                        abs_start = (wall0 or time.time()) + utt_first_idx / sr
+                        on_speaking_started(abs_start)
+                        if on_audio is not None:
+                            on_audio(new_audio)
                     else:
                         pending_audio = np.append(pending_audio, new_audio)
+                        if on_audio is not None and len(new_audio):
+                            on_audio(new_audio)
             else:
                 # No audio yet — warn if mic silent for > 2 s
                 # if not warned_no_audio and (time.monotonic() - start_time) > 2.0:
