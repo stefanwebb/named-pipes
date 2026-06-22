@@ -118,12 +118,25 @@ Text-to-speech interface (`named_pipes.tts`).
 
 ### `STT`
 
-Speech-to-text interface (`named_pipes.stt`). Producer-only — no custom commands; the server broadcasts events continuously.
+Speech-to-text interface (`named_pipes.stt`). Streams transcription tokens from the microphone over a named pipe.
+
+**Commands**
+
+| Command | Args | Description |
+|---|---|---|
+| `start` | — | Start or resume listening on the microphone |
+| `pause` | — | Stop listening; finish transcribing audio already received |
+| `list_devices` | — | List available audio input devices |
+| `get_device` | — | Get the audio input device used by the current stream |
+| `set_device` | `device: str` | Set the audio input device used by the current stream |
 
 **Events**
 
 | Event | Fields | Description |
 |---|---|---|
 | `token` | `text: str` | Transcribed text fragment |
+| `speech` | `text: str` | The current speech utterance has an update |
 | `speech_start` | — | VAD detected speech onset |
 | `speech_end` | — | VAD detected speech offset |
+| `devices` | `devices: list` | Response to `list_devices` |
+| `device` | `device: str` | Response to `get_device` or `set_device` |
