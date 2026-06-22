@@ -3,9 +3,9 @@ Test client for the named-pipes STT server (named_pipes.stt.server.STTServer,
 backed by Moonshine Voice). Mirrors the terminal UX of tts_moonshine.py, but
 talks to the server over the named pipe instead of driving the mic directly.
 
-Lists available input devices, optionally selects one, then starts streaming
-transcription and overwrites the current line in place as the transcript
-updates.
+Lists available input devices, prompts you to choose one, then starts
+streaming transcription and overwrites the current line in place as the
+transcript updates.
 
 Requires the STT server to already be running:
     cpipe --serve stt
@@ -16,8 +16,6 @@ import threading
 
 from named_pipes.tools.client import ToolClient
 from named_pipes.utils import _is_fifo_connected
-
-DEVICE = None  # int index to select via set_device; None = leave server default
 
 
 class _LinePrinter:
@@ -94,11 +92,9 @@ def main() -> None:
         for d in devices:
             print(f"  [{d['index']}] {d['name']} ({d['channels']} ch)")
 
-        if DEVICE is not None:
-            print(f"\nSelecting device {DEVICE}...")
-            client.send_command("set_device", device=DEVICE)
-        else:
-            client.send_command("get_device")
+        choice = input("\nSelect a device index (blank = server default): ").strip()
+        device = int(choice) if choice else None
+        client.send_command("set_device", device=device)
 
         print("\nStarting transcription. Speak into the mic; Ctrl+C to stop.\n")
         client.send_command("start")
