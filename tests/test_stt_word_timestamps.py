@@ -72,10 +72,18 @@ def test_align_enabled_emits_absolute_words_at_speech_end():
         pipe._on_token(" world")
         pipe._on_end()  # enqueues final alignment over full utterance
 
-        assert _wait_for(lambda: any("words" in e for e in events))
-        worded = [e for e in events if "words" in e]
-        final = worded[-1]
-        assert final["text"].strip() == "hello world"
+        # Wait for the FINAL full-utterance alignment specifically: the
+        # incremental "hello" alignment may emit first, so waiting for "any
+        # words" then reading the last event would race the final job.
+        def _final_emitted():
+            return any(
+                "words" in e and e["text"].strip() == "hello world" for e in events
+            )
+
+        assert _wait_for(_final_emitted)
+        final = [
+            e for e in events if "words" in e and e["text"].strip() == "hello world"
+        ][-1]
         assert final["words"][0] == {"word": "hello", "start": 1000.0, "end": 1000.5}
         assert final["words"][1] == {"word": "world", "start": 1001.0, "end": 1001.5}
     finally:
