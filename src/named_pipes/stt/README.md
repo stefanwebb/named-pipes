@@ -1,6 +1,6 @@
 # named_pipes.stt
 
-Real-time speech-to-text transcription server over named pipes. Captures audio from the default microphone, applies Silero VAD, and broadcasts transcribed tokens to all subscribers using the Voxtral streaming decoder.
+Real-time speech-to-text transcription server over named pipes. Captures audio from a microphone and broadcasts transcribed text to all subscribers using [Moonshine Voice](https://github.com/moonshine-ai/moonshine).
 
 Pipe: `/tmp/tool-stt`
 
@@ -8,19 +8,37 @@ Pipe: `/tmp/tool-stt`
 
 ### `STTServer`
 
-`ToolServer` subclass. Implements the `STT` interface. This server is **producer-only** — it accepts no custom commands beyond the built-in `ToolServer` set. All output is broadcast to subscribers as events.
+`ToolServer` subclass. Implements the `stt` interface (`named_pipes.interfaces.stt.STT`).
 
-The transcription worker thread starts automatically on server initialisation.
+The Moonshine model is loaded eagerly on construction, but the microphone
+stream is **not** opened until a `start` command is received. Before
+`start`, clients can call `list_devices` / `get_device` / `set_device` to
+choose an input device.
+
+**Commands**
+
+| Command | Args | Description |
+|---|---|---|
+| `start` | — | Start or resume listening on the microphone |
+| `pause` | — | Stop listening; finish transcribing audio already received |
+| `list_devices` | — | List available audio input devices |
+| `get_device` | — | Get the audio input device used by the current stream |
+| `set_device` | `device: str` | Set the audio input device (index or name substring) |
 
 **Broadcast events**
 
 | Event | When |
 |---|---|
-| `speech_start` | VAD detects the onset of speech |
-| `token` | One transcribed sub-word token; `text` field holds the text |
-| `speech_end` | VAD detects the end of speech; all tokens for the utterance have been sent |
+| `speech_start` | A new transcription line starts |
+| `speech` | The current line's text is updated; `text` field holds the running transcript |
+| `speech_end` | The current line completes |
 
-Tokens between `speech_start` and `speech_end` form a single utterance. Concatenate their `text` fields to reconstruct the full transcription.
+**Response events**
+
+| Event | Sent in reply to | Fields |
+|---|---|---|
+| `devices` | `list_devices` | `devices: list` of `{index, name, channels}` |
+| `device` | `get_device` / `set_device` | `device: int \| None` |
 
 ---
 
@@ -30,10 +48,10 @@ Pydantic model holding server configuration.
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `model_path` | `str` | `"mistralai/Voxtral-Mini-4B-2507"` | HuggingFace model identifier |
-| `temperature` | `float` | `0.0` | Decoder sampling temperature |
-| `vad_onset` | `float` | `0.5` | Silero VAD speech-start threshold |
-| `vad_offset` | `float` | `0.35` | Silero VAD speech-end threshold |
+| `language` | `str` | `"en"` | Moonshine model language |
+| `device` | `int \| None` | `None` | Initial input device (`None` = host default) |
+| `update_interval` | `float` | `0.5` | Seconds between incremental transcript updates |
+| `verbose` | `bool` | `True` | Print loading/status messages to stdout |
 
 ---
 
@@ -42,21 +60,12 @@ Pydantic model holding server configuration.
 ```python
 class STTState(Enum):
     LOADING      = "loading"
+    READY        = "ready"        # model loaded, mic not yet started
     LISTENING    = "listening"
     TRANSCRIBING = "transcribing"
+    PAUSED       = "paused"
     ERROR        = "error"
 ```
-
-## Architecture
-
-The STT worker is launched as a daemon thread during `__init__`. It delegates to `named_pipes.stt.voxtral.stream_transcribe()`, which manages:
-
-- Microphone input via `sounddevice`
-- Silero VAD with configurable onset/offset thresholds and pre-roll buffering
-- Voxtral streaming decoder with a rotating KV cache
-- Per-token callbacks forwarded back to `STTServer` for broadcasting
-
-Shutdown is coordinated via a `threading.Event` stop flag.
 
 ## Launching
 
@@ -65,7 +74,7 @@ Shutdown is coordinated via a `threading.Event` stop flag.
 ```python
 from named_pipes.stt import STTServer, STTConfig
 
-config = STTConfig(vad_onset=0.6)
+config = STTConfig(language="en")
 server = STTServer(config)
 server.start()  # blocks until stop
 ```
@@ -83,13 +92,17 @@ cpipe --serve stt
 ## Wire Example
 
 ```
-(no command sent — server pushes events automatically)
+→ {"pid": 123, "cmd": "list_devices"}
+← {"event": "devices", "devices": [{"index": 0, "name": "MacBook Pro Microphone", "channels": 1}]}
+→ {"pid": 123, "cmd": "set_device", "device": 0}
+← {"event": "device", "device": 0}
+→ {"pid": 123, "cmd": "start"}
+← {"event": "state_changed", "state": "listening"}
 ← {"event": "speech_start"}
-← {"event": "token", "text": "Hello"}
-← {"event": "token", "text": ","}
-← {"event": "token", "text": " world"}
-← {"event": "token", "text": "."}
+← {"event": "speech", "text": "Hello"}
+← {"event": "speech", "text": "Hello, world"}
 ← {"event": "speech_end"}
+→ {"pid": 123, "cmd": "pause"}
 ```
 
 For continuous transcription in client code, subscribe directly using `ToolClient` rather than `cpipe` (which is designed for one-shot use):
@@ -98,7 +111,15 @@ For continuous transcription in client code, subscribe directly using `ToolClien
 from named_pipes.tools import ToolClient
 
 with ToolClient("stt") as client:
-    client.on("token", lambda m: print(m["text"], end="", flush=True))
+    client.send_command("start")
+    client.on("speech", lambda m: print(f"\r{m['text']}", end="", flush=True))
     client.on("speech_end", lambda _: print())
     client.wait()  # block until server stops
 ```
+
+## Legacy backend
+
+`named_pipes/stt/server_voxtral.py` holds the previous Voxtral-based
+implementation (producer-only, per-token `token` events via Silero VAD +
+the streaming Voxtral decoder). It is not wired into `__init__.py` /
+`launch.py` and is kept for reference only.

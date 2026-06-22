@@ -16,7 +16,12 @@ from rich.segment import Segment
 from named_pipes.chat.server import Backend, ChatConfig
 from named_pipes.tts.server import TTSConfig
 from named_pipes.stt.server import STTConfig
-from named_pipes.registry import Backend as RegBackend, ServerType, default_for_backend, models_for_backend
+from named_pipes.registry import (
+    Backend as RegBackend,
+    ServerType,
+    default_for_backend,
+    models_for_backend,
+)
 from named_pipes.system import get_system_info, _tool_name_from_path
 from named_pipes.tools.client import ToolClient
 from named_pipes.utils import _is_fifo_connected, scan_pipes
@@ -46,15 +51,24 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 
 TOOL_POLL_INTERVAL = 1.0
 
-_MESSENGER_COMMANDS = ["get_state", "get_description", "get_help", "get_config", "list_interfaces", "get_interface", "stop"]
+_MESSENGER_COMMANDS = [
+    "get_state",
+    "get_description",
+    "get_help",
+    "get_config",
+    "list_interfaces",
+    "get_interface",
+    "stop",
+]
 
 
 class _Input(Input):
-    BINDINGS = [Binding("escape", "dismiss_input", "Dismiss textbox", key_display="esc")]
+    BINDINGS = [
+        Binding("escape", "dismiss_input", "Dismiss textbox", key_display="esc")
+    ]
 
     def action_dismiss_input(self) -> None:
         self.blur()
-
 
 
 class _ManagedClient:
@@ -176,8 +190,7 @@ class _VerticalSeparator(Widget):
         try:
             my_y = self.region.y
             tops = sorted(
-                self.app.query_one(f"#{pid}").region.y - my_y
-                for pid in self._panel_ids
+                self.app.query_one(f"#{pid}").region.y - my_y for pid in self._panel_ids
             )
             if y == tops[0]:
                 char = "┬"
@@ -212,7 +225,9 @@ class LaunchModal(ModalScreen):
         backend: Backend = event.value
         options = _model_options(backend)
         if not options:
-            self.app.notify(f"No models registered for {backend.value}", severity="error")
+            self.app.notify(
+                f"No models registered for {backend.value}", severity="error"
+            )
             self.query_one("#chat-backend", Select).value = self._chat_backend
             return
         self._chat_backend = backend
@@ -234,7 +249,9 @@ class LaunchModal(ModalScreen):
         description = self.query_one("#chat-description", Input).value.strip()
         verbose = self.query_one("#chat-verbose", Switch).value
         try:
-            backend_kwargs = json.loads(self.query_one("#backend-kwargs", AutoTextArea).text)
+            backend_kwargs = json.loads(
+                self.query_one("#backend-kwargs", AutoTextArea).text
+            )
         except json.JSONDecodeError:
             self.app.notify("backend_kwargs is not valid JSON", severity="error")
             return
@@ -268,7 +285,9 @@ class LaunchModal(ModalScreen):
             sample_rate = int(self.query_one("#tts-sample-rate", Input).value.strip())
             blocksize = int(self.query_one("#tts-blocksize", Input).value.strip())
         except ValueError:
-            self.app.notify("sample_rate and blocksize must be integers", severity="error")
+            self.app.notify(
+                "sample_rate and blocksize must be integers", severity="error"
+            )
             return
         config = {
             "name": name,
@@ -297,20 +316,24 @@ class LaunchModal(ModalScreen):
         if os.path.exists(pipe_path) and _is_fifo_connected(pipe_path):
             self.app.notify(f"Tool '{name}' is already running", severity="error")
             return
+        device_text = self.query_one("#stt-device", Input).value.strip()
         try:
-            temperature = float(self.query_one("#stt-temperature", Input).value.strip())
-            vad_onset = int(self.query_one("#stt-vad-onset", Input).value.strip())
-            vad_offset = int(self.query_one("#stt-vad-offset", Input).value.strip())
+            update_interval = float(
+                self.query_one("#stt-update-interval", Input).value.strip()
+            )
+            device = int(device_text) if device_text else None
         except ValueError:
-            self.app.notify("temperature must be a float; vad_onset and vad_offset must be integers", severity="error")
+            self.app.notify(
+                "update_interval must be a float; device must be an integer or blank",
+                severity="error",
+            )
             return
         config = {
             "name": name,
             "description": self.query_one("#stt-description", Input).value.strip(),
-            "model_path": self.query_one("#stt-model-path", Input).value.strip(),
-            "temperature": temperature,
-            "vad_onset": vad_onset,
-            "vad_offset": vad_offset,
+            "language": self.query_one("#stt-language", Input).value.strip(),
+            "device": device,
+            "update_interval": update_interval,
             "verbose": self.query_one("#stt-verbose", Switch).value,
         }
         log_path = f"/tmp/tool-{name}.log"
@@ -331,7 +354,10 @@ class LaunchModal(ModalScreen):
                     with VerticalScroll():
                         with Horizontal(classes="field-row"):
                             yield Label("name:")
-                            yield _Input(value=ChatConfig.model_fields["name"].default, id="chat-name")
+                            yield _Input(
+                                value=ChatConfig.model_fields["name"].default,
+                                id="chat-name",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("model:")
                             yield Select(
@@ -350,64 +376,110 @@ class LaunchModal(ModalScreen):
                             )
                         with Horizontal(classes="field-row"):
                             yield Label("description:")
-                            yield _Input(value=ChatConfig.model_fields["description"].default, id="chat-description")
+                            yield _Input(
+                                value=ChatConfig.model_fields["description"].default,
+                                id="chat-description",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("backend_kwargs:")
                             yield AutoTextArea(
-                                json.dumps(ChatConfig.model_fields["backend_kwargs"].default, indent=2),
+                                json.dumps(
+                                    ChatConfig.model_fields["backend_kwargs"].default,
+                                    indent=2,
+                                ),
                                 id="backend-kwargs",
                             )
                         with Horizontal(classes="field-row"):
                             yield Label("verbose:")
-                            yield Switch(value=ChatConfig.model_fields["verbose"].default, id="chat-verbose")
+                            yield Switch(
+                                value=ChatConfig.model_fields["verbose"].default,
+                                id="chat-verbose",
+                            )
                         yield Button("Launch", id="chat-launch", variant="success")
                 with TabPane("Text-to-speech", id="launcher-tts"):
                     with VerticalScroll():
                         with Horizontal(classes="field-row"):
                             yield Label("name:")
-                            yield _Input(value=TTSConfig.model_fields["name"].default, id="tts-name")
+                            yield _Input(
+                                value=TTSConfig.model_fields["name"].default,
+                                id="tts-name",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("description:")
-                            yield _Input(value=TTSConfig.model_fields["description"].default, id="tts-description")
+                            yield _Input(
+                                value=TTSConfig.model_fields["description"].default,
+                                id="tts-description",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("model_id:")
-                            yield _Input(value=TTSConfig.model_fields["model_id"].default, id="tts-model-id")
+                            yield _Input(
+                                value=TTSConfig.model_fields["model_id"].default,
+                                id="tts-model-id",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("voice:")
-                            yield _Input(value=TTSConfig.model_fields["voice"].default, id="tts-voice")
+                            yield _Input(
+                                value=TTSConfig.model_fields["voice"].default,
+                                id="tts-voice",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("sample_rate:")
-                            yield _Input(value=str(TTSConfig.model_fields["sample_rate"].default), id="tts-sample-rate")
+                            yield _Input(
+                                value=str(
+                                    TTSConfig.model_fields["sample_rate"].default
+                                ),
+                                id="tts-sample-rate",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("blocksize:")
-                            yield _Input(value=str(TTSConfig.model_fields["blocksize"].default), id="tts-blocksize")
+                            yield _Input(
+                                value=str(TTSConfig.model_fields["blocksize"].default),
+                                id="tts-blocksize",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("verbose:")
-                            yield Switch(value=TTSConfig.model_fields["verbose"].default, id="tts-verbose")
+                            yield Switch(
+                                value=TTSConfig.model_fields["verbose"].default,
+                                id="tts-verbose",
+                            )
                         yield Button("Launch", id="tts-launch", variant="success")
                 with TabPane("Speech-to-text", id="launcher-stt"):
                     with VerticalScroll():
                         with Horizontal(classes="field-row"):
                             yield Label("name:")
-                            yield _Input(value=STTConfig.model_fields["name"].default, id="stt-name")
+                            yield _Input(
+                                value=STTConfig.model_fields["name"].default,
+                                id="stt-name",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("description:")
-                            yield _Input(value=STTConfig.model_fields["description"].default, id="stt-description")
+                            yield _Input(
+                                value=STTConfig.model_fields["description"].default,
+                                id="stt-description",
+                            )
                         with Horizontal(classes="field-row"):
-                            yield Label("model_path:")
-                            yield _Input(value=STTConfig.model_fields["model_path"].default, id="stt-model-path")
+                            yield Label("language:")
+                            yield _Input(
+                                value=STTConfig.model_fields["language"].default,
+                                id="stt-language",
+                            )
                         with Horizontal(classes="field-row"):
-                            yield Label("temperature:")
-                            yield _Input(value=str(STTConfig.model_fields["temperature"].default), id="stt-temperature")
+                            yield Label("device:")
+                            yield _Input(value="", id="stt-device")
                         with Horizontal(classes="field-row"):
-                            yield Label("vad_onset:")
-                            yield _Input(value=str(STTConfig.model_fields["vad_onset"].default), id="stt-vad-onset")
-                        with Horizontal(classes="field-row"):
-                            yield Label("vad_offset:")
-                            yield _Input(value=str(STTConfig.model_fields["vad_offset"].default), id="stt-vad-offset")
+                            yield Label("update_interval:")
+                            yield _Input(
+                                value=str(
+                                    STTConfig.model_fields["update_interval"].default
+                                ),
+                                id="stt-update-interval",
+                            )
                         with Horizontal(classes="field-row"):
                             yield Label("verbose:")
-                            yield Switch(value=STTConfig.model_fields["verbose"].default, id="stt-verbose")
+                            yield Switch(
+                                value=STTConfig.model_fields["verbose"].default,
+                                id="stt-verbose",
+                            )
                         yield Button("Launch", id="stt-launch", variant="success")
 
 
@@ -594,7 +666,9 @@ class TuiApp(App):
                     yield Label("", id="tool-info-desc", markup=True)
             yield _VerticalSeparator("commands-panel", "stdout-panel")
             with Vertical(classes="right-split"):
-                with Vertical(classes="system-col", id="commands-panel") as commands_panel:
+                with Vertical(
+                    classes="system-col", id="commands-panel"
+                ) as commands_panel:
                     commands_panel.border_title = "Commands"
                     yield Label("No tools running.", id="messenger-empty")
                     with Vertical(id="messenger-controls"):
@@ -610,7 +684,9 @@ class TuiApp(App):
                         yield Button("Send", id="messenger-send", variant="primary")
                 with Vertical(classes="output-col", id="stdout-panel") as stdout_panel:
                     stdout_panel.border_title = "stdout"
-                    yield RichLog(id="tools-stdout", markup=False, highlight=False, max_lines=1000)
+                    yield RichLog(
+                        id="tools-stdout", markup=False, highlight=False, max_lines=1000
+                    )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -751,8 +827,6 @@ class TuiApp(App):
         name_label.update(f"[bold]{name}[/bold]")
         desc_label.update(description)
 
-
-
     def _commands_for_tool(self, tool_name: str) -> list[dict]:
         mc = self._managed_clients.get(tool_name)
         if mc is None:
@@ -774,12 +848,16 @@ class TuiApp(App):
         commands = self._commands_for_tool(tool_name)
         cmd_select = self.query_one("#messenger-cmd", Select)
         if commands:
-            options = sorted([(cmd["name"], cmd["name"]) for cmd in commands], key=lambda x: x[0])
+            options = sorted(
+                [(cmd["name"], cmd["name"]) for cmd in commands], key=lambda x: x[0]
+            )
         else:
             options = [(c, c) for c in sorted(_MESSENGER_COMMANDS)]
         current = str(cmd_select.value)
         cmd_select.set_options(options)
-        cmd_select.value = current if any(v == current for _, v in options) else options[0][1]
+        cmd_select.value = (
+            current if any(v == current for _, v in options) else options[0][1]
+        )
 
     def _save_current_args(self) -> None:
         tool = self._active_messenger_tool
@@ -826,7 +904,9 @@ class TuiApp(App):
         self._active_messenger_cmd = None
         for n, mc in self._managed_clients.items():
             mc.on_event = self._make_event_callback() if n == name else None
-        self.query_one("#messenger-send", Button).disabled = name not in self._managed_clients
+        self.query_one("#messenger-send", Button).disabled = (
+            name not in self._managed_clients
+        )
         self._refresh_messenger_commands(name)
         if name != self._watched_tool:
             self._start_log_watcher(name)
@@ -844,6 +924,7 @@ class TuiApp(App):
     def _make_event_callback(self) -> callable:
         def cb(msg: dict) -> None:
             self.call_from_thread(self._on_tool_event, msg)
+
         return cb
 
     def _on_interface_def(self, name: str, defn: dict) -> None:
@@ -912,7 +993,11 @@ class TuiApp(App):
     @on(TextArea.Changed)
     def on_messenger_arg_changed(self, event: TextArea.Changed) -> None:
         ta = event.text_area
-        if not (isinstance(ta, AutoTextArea) and ta.id and ta.id.startswith("messenger-arg-")):
+        if not (
+            isinstance(ta, AutoTextArea)
+            and ta.id
+            and ta.id.startswith("messenger-arg-")
+        ):
             return
         tool = self._active_messenger_tool
         cmd = self._active_messenger_cmd
@@ -933,7 +1018,10 @@ class TuiApp(App):
             self.notify(f"Tool '{tool}' not connected", severity="error")
             return
         spec = self._command_spec(tool, cmd)
-        arg_types = {arg["name"]: arg.get("type", "str") for arg in (spec.get("args", []) if spec else [])}
+        arg_types = {
+            arg["name"]: arg.get("type", "str")
+            for arg in (spec.get("args", []) if spec else [])
+        }
         kwargs = {}
         for ta in self.query_one("#messenger-args", Vertical).query(AutoTextArea):
             if not ta.text:
@@ -943,7 +1031,9 @@ class TuiApp(App):
                 try:
                     kwargs[arg_name] = json.loads(ta.text)
                 except json.JSONDecodeError:
-                    self.notify(f"Argument '{arg_name}' must be valid JSON", severity="error")
+                    self.notify(
+                        f"Argument '{arg_name}' must be valid JSON", severity="error"
+                    )
                     return
             else:
                 kwargs[arg_name] = ta.text

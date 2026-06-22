@@ -23,9 +23,9 @@ class _STTClient(ToolClient):
     def __init__(self):
         super().__init__("stt")
 
-        @self.on("token")
+        @self.on("speech")
         def _(msg):
-            print(msg.get("text", ""), end="", flush=True)
+            print(f"\r{msg.get('text', '')}", end="", flush=True)
 
         @self.on("speech_start")
         def _(msg):
@@ -33,7 +33,7 @@ class _STTClient(ToolClient):
 
         @self.on("speech_end")
         def _(msg):
-            print("[speech_end]", flush=True)
+            print("\n[speech_end]", flush=True)
 
         @self.on("state_changed")
         def _(msg):
@@ -42,6 +42,7 @@ class _STTClient(ToolClient):
 
 def main():
     with _STTClient() as stt:
+        stt.send_command("start")
         print("Subscribed to /tmp/tool-stt. Speak into the mic; Ctrl+C to stop.")
 
         try:
