@@ -5,50 +5,111 @@ Except where otherwise noted, this work is licensed under a
 Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
-STT subscriber: connects to the STT server on /tmp/tool-stt, subscribes,
-and prints each broadcast message until Ctrl+C.
+Test client for the named-pipes STT server (any backend implementing the
+`stt` interface — see named_pipes.interfaces.stt.STT).
 
-Requires the STT server to be running first:
+Lists available input devices, prompts you to choose one, then starts
+streaming transcription and overwrites the current line in place as the
+transcript updates.
+
+Requires the STT server to already be running:
     cpipe --serve stt
 """
 
+import sys
 import threading
 
 from named_pipes.tools.client import ToolClient
+from named_pipes.utils import _is_fifo_connected
 
 
-class _STTClient(ToolClient):
-    """Subscriber for the STTServer protocol."""
+class _LinePrinter:
+    def __init__(self) -> None:
+        self.last_line_length = 0
 
-    def __init__(self):
-        super().__init__("stt")
+    def overwrite(self, text: str) -> None:
+        print(f"\r{text}", end="", flush=True)
+        if len(text) < self.last_line_length:
+            print(" " * (self.last_line_length - len(text)), end="", flush=True)
+        self.last_line_length = len(text)
 
-        @self.on("speech")
+    def newline(self) -> None:
+        print()
+        self.last_line_length = 0
+
+
+def main() -> None:
+    pipe_path = "/tmp/tool-stt"
+    if not _is_fifo_connected(pipe_path):
+        print(
+            "STT server not running. Start it first with:\n  cpipe --serve stt",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    printer = _LinePrinter()
+    devices: list[dict] = []
+    devices_received = threading.Event()
+    started = threading.Event()
+
+    with ToolClient("stt") as client:
+
+        @client.on("devices")
         def _(msg):
-            print(f"\r{msg.get('text', '')}", end="", flush=True)
+            devices.extend(msg.get("devices", []))
+            devices_received.set()
 
-        @self.on("speech_start")
+        @client.on("device")
         def _(msg):
-            print("[speech_start] ", end="", flush=True)
+            print(f"[device] using index {msg.get('device')}")
 
-        @self.on("speech_end")
+        @client.on("speech_start")
         def _(msg):
-            print("\n[speech_end]", flush=True)
+            printer.newline()
+            print("[speech_start]")
 
-        @self.on("state_changed")
+        @client.on("speech")
         def _(msg):
-            print(f"\n[state_changed] {msg.get('state', '')}", flush=True)
+            printer.overwrite(msg.get("text", ""))
 
+        @client.on("speech_end")
+        def _(msg):
+            printer.newline()
+            print("[speech_end]")
 
-def main():
-    with _STTClient() as stt:
-        stt.send_command("start")
-        print("Subscribed to /tmp/tool-stt. Speak into the mic; Ctrl+C to stop.")
+        @client.on("state_changed")
+        def _(msg):
+            state = msg.get("state", "")
+            print(f"[state_changed] {state}")
+            if state == "listening":
+                started.set()
+
+        @client.on("error")
+        def _(msg):
+            print(f"[error] {msg.get('message', '')}", file=sys.stderr)
+
+        client.send_command("list_devices")
+        if not devices_received.wait(timeout=5):
+            print("Timed out waiting for device list.", file=sys.stderr)
+            sys.exit(1)
+
+        print("Available input devices:")
+        for d in devices:
+            print(f"  [{d['index']}] {d['name']} ({d['channels']} ch)")
+
+        choice = input("\nSelect a device index (blank = server default): ").strip()
+        device = int(choice) if choice else None
+        client.send_command("set_device", device=device)
+
+        print("\nStarting transcription. Speak into the mic; Ctrl+C to stop.\n")
+        client.send_command("start")
 
         try:
+            started.wait(timeout=10)
             threading.Event().wait()
         except KeyboardInterrupt:
-            print("\nUnsubscribing.")
+            print("\nPausing...")
+            client.send_command("pause")
 
 
 if __name__ == "__main__":

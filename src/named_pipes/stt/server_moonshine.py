@@ -6,8 +6,7 @@ Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 
 STTServer — a named-pipe server that streams speech-to-text transcription
-from a microphone to all subscribers, using the vendored Voxtral streaming
-decoder with Silero VAD.
+from a microphone to all subscribers, using Moonshine Voice.
 
 The microphone is not opened until a "start" command is received. Before
 that, clients may call "list_devices"/"get_device"/"set_device" to choose
@@ -21,15 +20,22 @@ from enum import Enum
 import sounddevice as sd
 from pydantic import BaseModel
 
-from named_pipes.stt.voxtral.stream import stream_transcribe
+from moonshine_voice import (
+    MicTranscriber,
+    TranscriptEventListener,
+    get_model_for_language,
+)
+
+from moonshine_voice.download import ModelArch
+
 from named_pipes.tools.server import ToolServer, ToolState
 
 
 class STTState(Enum):
     RUNNING = ToolState.RUNNING.value
     STOPPING = ToolState.STOPPING.value
-    READY = "ready"
     LOADING = "loading"
+    READY = "ready"
     LISTENING = "listening"
     TRANSCRIBING = "transcribing"
     PAUSED = "paused"
@@ -39,30 +45,63 @@ class STTState(Enum):
 class STTConfig(BaseModel):
     name: str = "stt"
     description: str = "👂 Real-time speech-to-text server over a named pipe."
-    model_path: str = "mlx-community/Voxtral-Mini-4B-Realtime-6bit"
-    temperature: float = 0.0
-    vad_onset: int = 2
-    vad_offset: int = 32
+    language: str = "en"
     device: int | None = None
+    update_interval: float = 0.5
     verbose: bool = True
 
 
-class STTServer(ToolServer):
-    """Named-pipe STT server backed by the vendored Voxtral streaming decoder.
+class _TranscriptListener(TranscriptEventListener):
+    """Forwards Moonshine transcript events to the owning STTServer."""
 
-    The Voxtral model and VAD are loaded lazily on the first "start"
-    command rather than at construction time, so that "list_devices" /
-    "get_device" / "set_device" are available immediately.
+    def __init__(self, server: "STTServer"):
+        self._server = server
+
+    def on_line_started(self, event) -> None:
+        self._server._on_line_started(event.line)
+
+    def on_line_text_changed(self, event) -> None:
+        self._server._on_line_text_changed(event.line)
+
+    def on_line_completed(self, event) -> None:
+        self._server._on_line_completed(event.line)
+
+    def on_error(self, event) -> None:
+        self._server._on_error(event.error)
+
+
+class STTServer(ToolServer):
+    """Named-pipe STT server backed by Moonshine Voice.
+
+    The Moonshine model is loaded eagerly on construction, but the
+    microphone stream is only opened once a "start" command is received.
     """
 
     def __init__(self, config: STTConfig = STTConfig()):
         super().__init__(config.name, description=config.description)
-        self._config = config
+        self._verbose = config.verbose
         self._device = config.device
-        self._current_text = ""
         self._broadcast_lock = threading.Lock()
-        self._stop_event: threading.Event | None = None
-        self._worker: threading.Thread | None = None
+
+        self.set_state(STTState.LOADING)
+        try:
+            if self._verbose:
+                print(
+                    f"[STT] Loading Moonshine model for language={config.language!r}…"
+                )
+            model_path, model_arch = get_model_for_language(
+                wanted_language=config.language,
+                wanted_model_arch=ModelArch.MEDIUM_STREAMING)
+            self._transcriber = MicTranscriber(
+                model_path=model_path,
+                model_arch=model_arch,
+                update_interval=config.update_interval,
+                device=self._device,
+            )
+            self._transcriber.add_listener(_TranscriptListener(self))
+        except Exception:
+            self.set_state(STTState.ERROR)
+            raise
 
         self.set_state(STTState.READY)
 
@@ -80,37 +119,11 @@ class STTServer(ToolServer):
     # -----------------------------------------------------------------------
 
     def _handle_start(self, _msg: dict, _pid: int | None) -> None:
-        if self._worker is not None and self._worker.is_alive():
-            return
-        self.set_state(STTState.LOADING)
-        self._stop_event = threading.Event()
-        self._worker = threading.Thread(
-            target=stream_transcribe,
-            kwargs={
-                "model_path": self._config.model_path,
-                "temperature": self._config.temperature,
-                "vad_onset": self._config.vad_onset,
-                "vad_offset": self._config.vad_offset,
-                "device": self._device,
-                "verbose": self._config.verbose,
-                "on_token": self._on_token,
-                "on_speaking_started": self._on_start,
-                "on_speaking_finished": self._on_end,
-                "on_ready": self._on_ready,
-                "stop_event": self._stop_event,
-            },
-            daemon=True,
-            name="stt-worker",
-        )
-        self._worker.start()
+        self._transcriber.start()
+        self.set_state(STTState.LISTENING)
 
     def _handle_pause(self, _msg: dict, _pid: int | None) -> None:
-        if self._stop_event is None:
-            return
-        self._stop_event.set()
-        self._worker.join(timeout=10)
-        self._worker = None
-        self._stop_event = None
+        self._transcriber.stop()
         self.set_state(STTState.PAUSED)
 
     def _handle_list_devices(self, _msg: dict, pid: int | None) -> None:
@@ -133,12 +146,18 @@ class STTServer(ToolServer):
 
         self._device = device
 
-        # The Voxtral worker has no live device-switch primitive — if it's
-        # currently running, pause and restart it on the new device.
-        was_listening = self._worker is not None and self._worker.is_alive()
+        # MicTranscriber has no public API for switching devices, so close
+        # the underlying audio stream (if any) and let it reopen at the new
+        # device on the next start() — resuming immediately if it was
+        # already listening.
+        was_listening = self._transcriber._should_listen
+        if self._transcriber._sd_stream is not None:
+            self._transcriber._sd_stream.stop()
+            self._transcriber._sd_stream.close()
+            self._transcriber._sd_stream = None
+        self._transcriber._device = device
         if was_listening:
-            self._handle_pause(msg, pid)
-            self._handle_start(msg, pid)
+            self._transcriber.start()
 
         self.send_event("device", pid, device=device)
 
@@ -156,39 +175,39 @@ class STTServer(ToolServer):
         raise ValueError(f"no input device matching {value!r}")
 
     # -----------------------------------------------------------------------
-    # Voxtral worker callbacks (invoked from the stt-worker thread)
+    # Transcript event callbacks (invoked from the Moonshine listener thread)
     # -----------------------------------------------------------------------
 
-    def _on_ready(self) -> None:
-        self.set_state(STTState.LISTENING)
-
-    def _on_token(self, text: str) -> None:
-        self._current_text += text
-        with self._broadcast_lock:
-            self.send_event("token", text=text)
-            self.send_event("speech", text=self._current_text)
-
-    def _on_start(self) -> None:
-        self._current_text = ""
+    def _on_line_started(self, _line) -> None:
         self.set_state(STTState.TRANSCRIBING)
         with self._broadcast_lock:
             self.send_event("speech_start")
 
-    def _on_end(self) -> None:
+    def _on_line_text_changed(self, line) -> None:
         with self._broadcast_lock:
+            self.send_event("speech", text=line.text)
+
+    def _on_line_completed(self, line) -> None:
+        with self._broadcast_lock:
+            self.send_event("speech", text=line.text)
             self.send_event("speech_end")
         if self._state is STTState.TRANSCRIBING:
             self.set_state(STTState.LISTENING)
+
+    def _on_error(self, error) -> None:
+        self.set_state(STTState.ERROR)
+        with self._broadcast_lock:
+            self.send_event("error", message=str(error))
 
     # -----------------------------------------------------------------------
     # Cleanup
     # -----------------------------------------------------------------------
 
     def _close(self):
+        # moonshine_voice's stop()/close() aren't idempotent, and __del__
+        # calls _close() again after an explicit close — guard accordingly.
         if self._closed:
             return
-        if self._stop_event is not None:
-            self._stop_event.set()
-        if self._worker is not None:
-            self._worker.join(timeout=5)
+        self._transcriber.stop()
+        self._transcriber.close()
         super()._close()

@@ -77,6 +77,7 @@ def stream_transcribe(
     on_token: Optional[Callable[[str], None]] = None,
     on_ready: Optional[Callable[[], None]] = None,
     stop_event: Optional[threading.Event] = None,
+    device: Optional[int] = None,
     verbose: bool = True,
 ):
     model, sp, config = load_model(model_path)
@@ -246,6 +247,7 @@ def stream_transcribe(
         channels=1,
         dtype="float32",
         blocksize=SAMPLES_PER_TOKEN,
+        device=device,
         callback=callback,
     )
     stream.start()

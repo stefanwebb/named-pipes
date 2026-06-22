@@ -318,22 +318,24 @@ class LaunchModal(ModalScreen):
             return
         device_text = self.query_one("#stt-device", Input).value.strip()
         try:
-            update_interval = float(
-                self.query_one("#stt-update-interval", Input).value.strip()
-            )
+            temperature = float(self.query_one("#stt-temperature", Input).value.strip())
+            vad_onset = int(self.query_one("#stt-vad-onset", Input).value.strip())
+            vad_offset = int(self.query_one("#stt-vad-offset", Input).value.strip())
             device = int(device_text) if device_text else None
         except ValueError:
             self.app.notify(
-                "update_interval must be a float; device must be an integer or blank",
+                "temperature must be a float; vad_onset/vad_offset/device must be integers",
                 severity="error",
             )
             return
         config = {
             "name": name,
             "description": self.query_one("#stt-description", Input).value.strip(),
-            "language": self.query_one("#stt-language", Input).value.strip(),
+            "model_path": self.query_one("#stt-model-path", Input).value.strip(),
+            "temperature": temperature,
+            "vad_onset": vad_onset,
+            "vad_offset": vad_offset,
             "device": device,
-            "update_interval": update_interval,
             "verbose": self.query_one("#stt-verbose", Switch).value,
         }
         log_path = f"/tmp/tool-{name}.log"
@@ -458,22 +460,34 @@ class LaunchModal(ModalScreen):
                                 id="stt-description",
                             )
                         with Horizontal(classes="field-row"):
-                            yield Label("language:")
+                            yield Label("model_path:")
                             yield _Input(
-                                value=STTConfig.model_fields["language"].default,
-                                id="stt-language",
+                                value=STTConfig.model_fields["model_path"].default,
+                                id="stt-model-path",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("temperature:")
+                            yield _Input(
+                                value=str(
+                                    STTConfig.model_fields["temperature"].default
+                                ),
+                                id="stt-temperature",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("vad_onset:")
+                            yield _Input(
+                                value=str(STTConfig.model_fields["vad_onset"].default),
+                                id="stt-vad-onset",
+                            )
+                        with Horizontal(classes="field-row"):
+                            yield Label("vad_offset:")
+                            yield _Input(
+                                value=str(STTConfig.model_fields["vad_offset"].default),
+                                id="stt-vad-offset",
                             )
                         with Horizontal(classes="field-row"):
                             yield Label("device:")
                             yield _Input(value="", id="stt-device")
-                        with Horizontal(classes="field-row"):
-                            yield Label("update_interval:")
-                            yield _Input(
-                                value=str(
-                                    STTConfig.model_fields["update_interval"].default
-                                ),
-                                id="stt-update-interval",
-                            )
                         with Horizontal(classes="field-row"):
                             yield Label("verbose:")
                             yield Switch(
