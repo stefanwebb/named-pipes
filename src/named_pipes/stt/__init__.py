@@ -5,8 +5,18 @@ Creative Commons Attribution-ShareAlike 4.0 International License
 https://creativecommons.org/licenses/by-sa/4.0/deed.en
 """
 
-"""Streaming speech-to-text over a named pipe."""
+"""Streaming speech-to-text over a named pipe.
 
-from named_pipes.stt.server import STTConfig, STTServer
+Exports are lazy so that importing lightweight submodules (e.g. ``alignment``)
+does not pull in the Voxtral/MLX stack.
+"""
 
 __all__ = ["STTConfig", "STTServer"]
+
+
+def __getattr__(name):
+    if name in ("STTConfig", "STTServer"):
+        from named_pipes.stt.server import STTConfig, STTServer
+
+        return {"STTConfig": STTConfig, "STTServer": STTServer}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
