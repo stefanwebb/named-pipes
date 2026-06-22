@@ -50,7 +50,16 @@ STT = Interface(
                 ArgSpec(
                     name="text",
                     description="Updated transcription of the current utterance.",
-                )
+                ),
+                ArgSpec(
+                    name="words",
+                    type="list",
+                    required=False,
+                    description=(
+                        "Per-word timestamps when forced alignment is enabled: list of "
+                        "{word, start, end} with absolute Unix epoch seconds (ms precision)."
+                    ),
+                ),
             ],
         ),
         EventSpec(
