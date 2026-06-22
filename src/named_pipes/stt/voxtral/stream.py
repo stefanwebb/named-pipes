@@ -256,6 +256,7 @@ def stream_transcribe(
         silence_frame_count = 0
         vad_buf = np.zeros(0, dtype=np.float32)
         pre_roll.clear()
+        pre_roll_starts.clear()
         vad_model.reset_states()
 
     print("Listening... (Ctrl+C to stop)\n", flush=True)
