@@ -76,7 +76,7 @@ def stream_transcribe(
     on_speaking_finished=lambda: print("on_speaking_finished", flush=True),
     on_token: Optional[Callable[[str], None]] = None,
     on_ready: Optional[Callable[[], None]] = None,
-    on_audio: Optional[Callable[[object], None]] = None,
+    on_audio: Optional[Callable[[np.ndarray], None]] = None,
     stop_event: Optional[threading.Event] = None,
     device: Optional[int] = None,
     verbose: bool = True,
@@ -334,7 +334,7 @@ def stream_transcribe(
                             on_audio(new_audio)
                     else:
                         pending_audio = np.append(pending_audio, new_audio)
-                        if on_audio is not None and len(new_audio):
+                        if on_audio is not None:
                             on_audio(new_audio)
             else:
                 # No audio yet — warn if mic silent for > 2 s
