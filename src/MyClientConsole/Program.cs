@@ -30,6 +30,7 @@ var printer = new LinePrinter();
 var devices = new List<(int Index, string Name, int Channels)>();
 var devicesReceived = new ManualResetEventSlim(false);
 var started = new ManualResetEventSlim(false);
+var speechEnded = new ManualResetEventSlim(true);
 
 using var client = new ToolClient(ToolName);
 
@@ -54,33 +55,42 @@ client.On("device", msg =>
 
 client.On("speech_start", _ =>
 {
+    speechEnded.Reset();
     printer.Newline();
     Console.WriteLine("[speech_start]");
 });
 
 client.On("speech", msg =>
 {
-    var lines = new List<string> { msg["text"]?.GetValue<string>() ?? "" };
+    // The forced aligner runs out-of-process and reports back after the
+    // fact, so a "speech" event with words can arrive well after this
+    // utterance's speech_end. Only print the timestamps then, instead of
+    // re-printing the live partial text again.
     if (msg["words"] is JsonArray words && words.Count > 0)
     {
-        var parts = words
-            .OfType<JsonObject>()
-            .Select(w =>
-            {
-                var start = w["start"]?.GetValue<double>() ?? 0;
-                var end = w["end"]?.GetValue<double>() ?? 0;
-                var word = w["word"]?.GetValue<string>() ?? "";
-                return $"[{start:F3}–{end:F3}] {word}";
-            });
-        lines.Add(string.Join(" ", parts));
+        if (speechEnded.IsSet)
+        {
+            var parts = words
+                .OfType<JsonObject>()
+                .Select(w =>
+                {
+                    var start = w["start"]?.GetValue<double>() ?? 0;
+                    var end = w["end"]?.GetValue<double>() ?? 0;
+                    var word = w["word"]?.GetValue<string>() ?? "";
+                    return $"[{start:F3}–{end:F3}] {word}";
+                });
+            Console.WriteLine(string.Join(" ", parts));
+        }
+        return;
     }
-    printer.Overwrite(lines.ToArray());
+    printer.Overwrite(msg["text"]?.GetValue<string>() ?? "");
 });
 
 client.On("speech_end", _ =>
 {
     printer.Newline();
     Console.WriteLine("[speech_end]");
+    speechEnded.Set();
 });
 
 client.On("state_changed", msg =>

@@ -60,6 +60,7 @@ def main() -> None:
     devices: list[dict] = []
     devices_received = threading.Event()
     started = threading.Event()
+    speech_ended = threading.Event()
 
     with ToolClient("stt") as client:
 
@@ -74,25 +75,33 @@ def main() -> None:
 
         @client.on("speech_start")
         def _(msg):
+            speech_ended.clear()
             printer.newline()
             print("[speech_start]")
 
         @client.on("speech")
         def _(msg):
-            lines = [msg.get("text", "")]
             words = msg.get("words")
+            # The forced aligner runs out-of-process and reports back after the
+            # fact, so a "speech" event with words can arrive well after this
+            # utterance's speech_end. Only print the timestamps then, instead
+            # of re-printing the live partial text again.
             if words:
-                lines.append(
-                    " ".join(
-                        f"[{w['start']:.3f}–{w['end']:.3f}] {w['word']}" for w in words
+                if speech_ended.is_set():
+                    print(
+                        " ".join(
+                            f"[{w['start']:.3f}–{w['end']:.3f}] {w['word']}"
+                            for w in words
+                        )
                     )
-                )
-            printer.overwrite(*lines)
+                return
+            printer.overwrite(msg.get("text", ""))
 
         @client.on("speech_end")
         def _(msg):
             printer.newline()
             print("[speech_end]")
+            speech_ended.set()
 
         @client.on("state_changed")
         def _(msg):

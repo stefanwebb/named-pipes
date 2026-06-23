@@ -492,7 +492,7 @@ class LaunchModal(ModalScreen):
                         with Horizontal(classes="field-row"):
                             yield Label("align:")
                             yield Switch(
-                                value=STTConfig.model_fields["align"].default,
+                                value=True,
                                 id="stt-align",
                             )
                         with Horizontal(classes="field-row"):
