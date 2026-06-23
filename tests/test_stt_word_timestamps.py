@@ -31,6 +31,17 @@ class FakeAligner:
         ]
 
 
+class WarmingAligner(FakeAligner):
+    """FakeAligner that also records eager-warm calls."""
+
+    def __init__(self):
+        super().__init__()
+        self.warmed = False
+
+    def warm(self):
+        self.warmed = True
+
+
 def _spy_events(pipe):
     events = []
     pipe.send_event = lambda event, pid=None, **kw: events.append(
@@ -86,6 +97,27 @@ def test_align_enabled_emits_absolute_words_at_speech_end():
         ][-1]
         assert final["words"][0] == {"word": "hello", "start": 1000.0, "end": 1000.5}
         assert final["words"][1] == {"word": "world", "start": 1001.0, "end": 1001.5}
+    finally:
+        pipe._close()
+
+
+def test_start_eagerly_warms_aligner(monkeypatch):
+    monkeypatch.setattr("named_pipes.stt.server.stream_transcribe", lambda **kw: None)
+    fake = WarmingAligner()
+    pipe = STTServer(STTConfig(name="stt-test", align=True), aligner=fake)
+    try:
+        pipe._handle_start({}, None)
+        assert _wait_for(lambda: fake.warmed)
+    finally:
+        pipe._close()
+
+
+def test_start_without_align_does_not_warm(monkeypatch):
+    monkeypatch.setattr("named_pipes.stt.server.stream_transcribe", lambda **kw: None)
+    pipe = STTServer(STTConfig(name="stt-test"))
+    try:
+        pipe._handle_start({}, None)  # must not raise without an aligner
+        assert pipe._aligner is None
     finally:
         pipe._close()
 

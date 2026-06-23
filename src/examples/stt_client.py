@@ -24,18 +24,27 @@ from named_pipes.utils import _is_fifo_connected
 
 
 class _LinePrinter:
-    def __init__(self) -> None:
-        self.last_line_length = 0
+    """Overwrites an in-place block of one or more terminal lines."""
 
-    def overwrite(self, text: str) -> None:
-        print(f"\r{text}", end="", flush=True)
-        if len(text) < self.last_line_length:
-            print(" " * (self.last_line_length - len(text)), end="", flush=True)
-        self.last_line_length = len(text)
+    def __init__(self) -> None:
+        self.height = 0
+
+    def overwrite(self, *lines: str) -> None:
+        rows = max(len(lines), self.height)
+        if self.height:
+            if self.height > 1:
+                print(f"\x1b[{self.height - 1}A", end="")
+            print("\r", end="")
+        for i in range(rows):
+            line = lines[i] if i < len(lines) else ""
+            end = "\n" if i < rows - 1 else ""
+            print(f"\x1b[2K{line}", end=end, flush=True)
+        self.height = rows
 
     def newline(self) -> None:
-        print()
-        self.last_line_length = 0
+        if self.height:
+            print()
+        self.height = 0
 
 
 def main() -> None:
@@ -70,12 +79,15 @@ def main() -> None:
 
         @client.on("speech")
         def _(msg):
-            printer.overwrite(msg.get("text", ""))
+            lines = [msg.get("text", "")]
             words = msg.get("words")
             if words:
-                printer.newline()
-                for w in words:
-                    print(f"  [{w['start']:.3f}–{w['end']:.3f}] {w['word']}")
+                lines.append(
+                    " ".join(
+                        f"[{w['start']:.3f}–{w['end']:.3f}] {w['word']}" for w in words
+                    )
+                )
+            printer.overwrite(*lines)
 
         @client.on("speech_end")
         def _(msg):

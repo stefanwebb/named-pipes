@@ -76,12 +76,16 @@ class STTServer(ToolServer):
         # Per-utterance forced-alignment state.
         self._utt_audio = np.zeros(0, dtype=np.float32)
         self._utt_abs_start = 0.0
+        self._aligner = None
         self._coalescer = None
         if config.align:
             if aligner is None:
-                from named_pipes.stt.aligner import ForcedAligner
+                # Run the MLX aligner out-of-process: it cannot share a process
+                # with the Voxtral decoder (concurrent Metal use hangs). See
+                # named_pipes.stt.aligner_process.
+                from named_pipes.stt.aligner_process import SubprocessAligner
 
-                aligner = ForcedAligner(config.align_model, config.align_language)
+                aligner = SubprocessAligner(config.align_model, config.align_language)
             self._aligner = aligner
             self._coalescer = CoalescingAligner(
                 align_fn=self._aligner.align,
@@ -108,6 +112,11 @@ class STTServer(ToolServer):
         if self._worker is not None and self._worker.is_alive():
             return
         self.set_state(STTState.LOADING)
+        # Eagerly warm the out-of-process aligner so its model loads while the
+        # decoder spins up, hiding the load latency before the first utterance.
+        warm = getattr(self._aligner, "warm", None)
+        if callable(warm):
+            warm()
         self._stop_event = threading.Event()
         self._worker = threading.Thread(
             target=stream_transcribe,
@@ -225,6 +234,9 @@ class STTServer(ToolServer):
 
     def _emit_words(self, items, text: str, abs_start: float) -> None:
         words = to_absolute(items, abs_start)
+        if self._config.verbose:
+            line = " ".join(f"{it.word}[{it.start:.2f}–{it.end:.2f}]" for it in items)
+            print(f"[STT] words: {line}", flush=True)
         with self._broadcast_lock:
             self.send_event("speech", text=text, words=words)
 
@@ -241,6 +253,11 @@ class STTServer(ToolServer):
             return
         if self._coalescer is not None:
             self._coalescer.stop()
+            # Stop the coalescer first (joins its worker, so no align is in
+            # flight), then shut down the out-of-process aligner if it has one.
+            stop = getattr(self._aligner, "stop", None)
+            if callable(stop):
+                stop()
         if self._stop_event is not None:
             self._stop_event.set()
         if self._worker is not None:
