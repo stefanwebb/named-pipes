@@ -1,22 +1,18 @@
 ## New features
 
-- **C# `ToolClient`** — .NET client mirroring `tool_client.py`: creates the per-PID downstream FIFO via P/Invoke `mkfifo`, opens both FIFOs `O_RDWR`, and runs a background listener thread; `Program.cs` demo exercises `ping`, `get_state`, `get_description`, and a custom `greet` command
-- **Textual TUI (`named_pipes.app`)** — full terminal app with a Tools panel (live state/health polling), a Launcher modal for Chat/TTS/STT with per-backend config forms, a Messenger for sending commands/viewing streamed events and stdout logs, and an Info modal
-- **Interface system (`named_pipes.interfaces`)** — `Interface`/`CommandSpec`/`EventSpec`/`ArgSpec` describe each server's commands and events; new `list_interfaces`/`get_interface` built-in commands and an `INTERFACES` registry drive the Messenger's interface-aware command UI (arg defaults, caching, type coercion)
-- **`SystemInfo`** — platform-aware system info module, displayed in the TUI
-- **Model/backend registry** — unified `Backend` enum and `BackendEntry` registry for selecting platform-specific chat backends and default models from the Launcher
-- **STT interface expanded** — `start`/`pause`/`list_devices`/`get_device`/`set_device` commands, with `speech`/`devices`/`device` response/update events, implemented by both the Voxtral-backed `STTServer` (`server.py`) and an alternate Moonshine Voice backend (`server_moonshine.py`); microphone/model loading is now deferred until `start` is received
+- **Per-word forced-alignment timestamps for STT** — set `align=True` (`STTConfig.align`) to attach absolute-epoch word timestamps to `speech` events; backed by a new `ForcedAligner` wrapper around `mlx-audio`'s `Qwen3-ForcedAligner-0.6B-4bit` and a `CoalescingAligner` background worker that re-aligns on word boundaries plus once at `speech_end`
+- **Out-of-process aligner** — `SubprocessAligner` runs the forced aligner in a spawned child process, since concurrent Metal use by the decoder and aligner in one process hangs the server
+- **`--align` flag for `cpipe --serve stt`**, and an align toggle in the TUI's STT launcher (now defaulting to on)
+- **STT model caching across pause/resume** — Voxtral and Silero VAD are now cached on the server and reused across `pause`/`start` instead of reloading from disk; both load eagerly in a background thread at construction (state `loading` until ready), with the forced aligner warmed concurrently
+- **STT console clients rewritten** — `Program.cs` (the C# `ToolClient` demo) and `src/examples/stt_client.py` now list/select an input device, stream live transcription with word timings in place, and detect an already-running session (via `get_state`) to attach to it instead of restarting it; Ctrl+C only sends `pause` if the client itself started the session
 
 ## Improvements
 
-- Voxtral's `stream_transcribe` gained a `device` parameter, threaded through to `sounddevice.InputStream`, so `set_device` actually selects the input device
-- Fixed an event-ordering bug where `state_changed("listening")` was broadcast before `speech_end`, leaving client transcript lines unterminated
-- Promoted the STT test client into `src/examples/stt_client.py`: lists/selects an input device interactively before starting transcription, replacing the old producer-only example
-- Numerous TUI layout/styling fixes: panel borders and separator junctions, scrollbar suppression on `AutoTextArea`, Commands/stdout panel sizing and padding, stable tool-selection highlighting, `ListView` replacing `DataTable` in the Tools panel
+- Clients only print word-level timestamps once `speech_end` has fired, instead of re-printing the live partial transcript a second time when the (asynchronous, out-of-process) alignment result arrives late
+- Added a wall-clock anchor, `abs_start`, and an `on_audio` callback to `stream_transcribe`, needed to compute absolute word timestamps
+- Fixed `pre_roll_starts` falling out of lockstep with `pre_roll` in `flush_and_reset`
 
 ## Infrastructure / Documentation
 
-- Reorganised `named_pipes` into `named_pipes.pipes`, `named_pipes.tools`, and `named_pipes.app` packages; `cpipe` moved into `named_pipes.app.cli`
-- `SKILL.md` renamed to `HELP.md` across all tool packages
-- Added CC-BY-SA-4.0 copyright headers to all Python files
-- Added `moonshine-voice` to the `stt` extras
+- Added design spec and implementation plan docs for STT per-word forced-alignment timestamps
+- Made `named_pipes.stt`'s package `__init__` lazy; repaired a stale `STTServer` test for the lazy-start architecture
