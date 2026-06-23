@@ -27,7 +27,7 @@ from named_pipes.stt.alignment import (
     detect_word_boundary,
     to_absolute,
 )
-from named_pipes.stt.voxtral.stream import stream_transcribe
+from named_pipes.stt.voxtral.stream import load_into_cache, stream_transcribe
 from named_pipes.tools.server import ToolServer, ToolState
 
 
@@ -59,9 +59,12 @@ class STTConfig(BaseModel):
 class STTServer(ToolServer):
     """Named-pipe STT server backed by the vendored Voxtral streaming decoder.
 
-    The Voxtral model and VAD are loaded lazily on the first "start"
-    command rather than at construction time, so that "list_devices" /
-    "get_device" / "set_device" are available immediately.
+    The Voxtral model and VAD start loading in a background thread at
+    construction time (state is "loading" until they're ready), and the
+    forced aligner — if enabled — is warmed concurrently. "list_devices" /
+    "get_device" / "set_device" don't depend on any of this and remain
+    available immediately. A later "start" reuses whatever is already
+    cached rather than reloading from disk.
     """
 
     def __init__(self, config: STTConfig = STTConfig(), aligner=None):
@@ -72,6 +75,10 @@ class STTServer(ToolServer):
         self._broadcast_lock = threading.Lock()
         self._stop_event: threading.Event | None = None
         self._worker: threading.Thread | None = None
+        # Holds the loaded Voxtral model/sp/config and Silero VAD so pause →
+        # start reuses them instead of reloading from disk.
+        self._model_cache: dict = {}
+        self._preload_thread: threading.Thread | None = None
 
         # Per-utterance forced-alignment state.
         self._utt_audio = np.zeros(0, dtype=np.float32)
@@ -93,7 +100,17 @@ class STTServer(ToolServer):
                 on_error=self._on_align_error,
             )
 
-        self.set_state(STTState.READY)
+        self.set_state(STTState.LOADING)
+        # Warm the out-of-process aligner concurrently; it's fire-and-forget
+        # (no completion signal), so it doesn't gate the READY transition
+        # below — only the Voxtral model and VAD do.
+        warm = getattr(self._aligner, "warm", None)
+        if callable(warm):
+            warm()
+        self._preload_thread = threading.Thread(
+            target=self._preload_models, daemon=True, name="stt-preload"
+        )
+        self._preload_thread.start()
 
         self.handler("start")(self._handle_start)
         self.handler("pause")(self._handle_pause)
@@ -103,6 +120,15 @@ class STTServer(ToolServer):
 
     def _list_interfaces(self) -> list[str]:
         return super()._list_interfaces() + ["stt"]
+
+    def _preload_models(self) -> None:
+        """Background-load the Voxtral model and VAD into ``self._model_cache``
+        so the first "start" doesn't pay the load latency. Runs once, from the
+        constructor."""
+        load_into_cache(
+            self._model_cache, self._config.model_path, verbose=self._config.verbose
+        )
+        self.set_state(STTState.READY)
 
     # -----------------------------------------------------------------------
     # Command handlers
@@ -117,6 +143,11 @@ class STTServer(ToolServer):
         warm = getattr(self._aligner, "warm", None)
         if callable(warm):
             warm()
+        # The constructor's background preload may still be running (or may
+        # not have started yet) — wait for it so the worker below reuses the
+        # cached model/VAD instead of racing to load them a second time.
+        if self._preload_thread is not None and self._preload_thread.is_alive():
+            self._preload_thread.join()
         self._stop_event = threading.Event()
         self._worker = threading.Thread(
             target=stream_transcribe,
@@ -133,6 +164,7 @@ class STTServer(ToolServer):
                 "on_ready": self._on_ready,
                 "on_audio": self._on_audio,
                 "stop_event": self._stop_event,
+                "model_cache": self._model_cache,
             },
             daemon=True,
             name="stt-worker",
@@ -251,6 +283,8 @@ class STTServer(ToolServer):
     def _close(self):
         if self._closed:
             return
+        if self._preload_thread is not None:
+            self._preload_thread.join(timeout=30)
         if self._coalescer is not None:
             self._coalescer.stop()
             # Stop the coalescer first (joins its worker, so no align is in

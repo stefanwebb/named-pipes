@@ -45,6 +45,22 @@ def load_vad():
     return vad_model
 
 
+def load_into_cache(model_cache: dict, model_path: str, verbose: bool = True) -> None:
+    """Populate ``model_cache`` with the Voxtral model/sp/config and Silero VAD,
+    skipping any piece already present. Lets callers preload eagerly (e.g. at
+    server construction) and have ``stream_transcribe`` reuse the same objects
+    across sessions instead of reloading from disk each time."""
+    if "model" not in model_cache:
+        model, sp, config = load_model(model_path)
+        model_cache["model"] = model
+        model_cache["sp"] = sp
+        model_cache["config"] = config
+    if "vad_model" not in model_cache:
+        if verbose:
+            print("Loading VAD...", flush=True)
+        model_cache["vad_model"] = load_vad()
+
+
 def _run_vad_chunks(
     vad_buf: np.ndarray,
     new_audio: np.ndarray,
@@ -80,8 +96,18 @@ def stream_transcribe(
     stop_event: Optional[threading.Event] = None,
     device: Optional[int] = None,
     verbose: bool = True,
+    model_cache: Optional[dict] = None,
 ):
-    model, sp, config = load_model(model_path)
+    """Run one listening session until ``stop_event`` is set.
+
+    If ``model_cache`` is given, the Voxtral model and Silero VAD are loaded
+    into it once (via ``load_into_cache``) and reused on subsequent calls
+    (e.g. across pause/resume), instead of being reloaded from disk every
+    session.
+    """
+    cache = model_cache if model_cache is not None else {}
+    load_into_cache(cache, model_path, verbose=verbose)
+    model, sp, config = cache["model"], cache["sp"], cache["config"]
 
     prompt_tokens, n_delay_tokens = _build_prompt_tokens(sp)
     prefix_len = len(prompt_tokens)
@@ -97,9 +123,7 @@ def stream_transcribe(
     n_layers = len(model.language_model.layers)
     sliding_window = 8192
 
-    if verbose:
-        print("Loading VAD...", flush=True)
-    vad_model = load_vad()
+    vad_model = cache["vad_model"]
 
     if on_ready is not None:
         on_ready()
