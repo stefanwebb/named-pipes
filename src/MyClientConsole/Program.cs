@@ -31,6 +31,13 @@ var devices = new List<(int Index, string Name, int Channels)>();
 var devicesReceived = new ManualResetEventSlim(false);
 var started = new ManualResetEventSlim(false);
 var speechEnded = new ManualResetEventSlim(true);
+var stateReceived = new ManualResetEventSlim(false);
+var currentState = "";
+
+// States in which the mic is already open — list_devices/set_device/start
+// are skipped so a second client can attach to a session another process
+// started.
+var activeStates = new HashSet<string> { "listening", "transcribing" };
 
 using var client = new ToolClient(ToolName);
 
@@ -52,6 +59,12 @@ client.On("devices", msg =>
 
 client.On("device", msg =>
     Console.WriteLine($"[device] using index {msg["device"]?.ToJsonString() ?? "null"}"));
+
+client.On("state", msg =>
+{
+    currentState = msg["state"]?.GetValue<string>() ?? "";
+    stateReceived.Set();
+});
 
 client.On("speech_start", _ =>
 {
@@ -107,28 +120,46 @@ client.On("error", msg =>
 client.StartListening();
 client.Subscribe();
 
-// Ask the server for the available input devices.
-client.SendCommand("list_devices");
-if (!devicesReceived.Wait(TimeSpan.FromSeconds(5)))
+client.SendCommand("get_state");
+if (!stateReceived.Wait(TimeSpan.FromSeconds(5)))
 {
-    Console.Error.WriteLine("Timed out waiting for device list.");
+    Console.Error.WriteLine("Timed out waiting for server state.");
     return 1;
 }
 
-Console.WriteLine("Available input devices:");
-foreach (var d in devices)
-    Console.WriteLine($"  [{d.Index}] {d.Name} ({d.Channels} ch)");
+var attached = activeStates.Contains(currentState);
+if (attached)
+{
+    Console.WriteLine(
+        $"STT server already running (state: {currentState}); attaching to the existing session.\n");
+    started.Set();
+}
+else
+{
+    // Ask the server for the available input devices.
+    client.SendCommand("list_devices");
+    if (!devicesReceived.Wait(TimeSpan.FromSeconds(5)))
+    {
+        Console.Error.WriteLine("Timed out waiting for device list.");
+        return 1;
+    }
 
-Console.Write("\nSelect a device index (blank = server default): ");
-var choice = Console.ReadLine()?.Trim();
-int? device = string.IsNullOrEmpty(choice) ? null : int.Parse(choice);
-client.SendCommand("set_device",
-    new JsonObject { ["device"] = device.HasValue ? JsonValue.Create(device.Value) : null });
+    Console.WriteLine("Available input devices:");
+    foreach (var d in devices)
+        Console.WriteLine($"  [{d.Index}] {d.Name} ({d.Channels} ch)");
 
-Console.WriteLine("\nStarting transcription. Speak into the mic; Ctrl+C to stop.\n");
-client.SendCommand("start");
+    Console.Write("\nSelect a device index (blank = server default): ");
+    var choice = Console.ReadLine()?.Trim();
+    int? device = string.IsNullOrEmpty(choice) ? null : int.Parse(choice);
+    client.SendCommand("set_device",
+        new JsonObject { ["device"] = device.HasValue ? JsonValue.Create(device.Value) : null });
 
-// Block until Ctrl+C, then pause the server cleanly.
+    Console.WriteLine("\nStarting transcription. Speak into the mic; Ctrl+C to stop.\n");
+    client.SendCommand("start");
+}
+
+// Block until Ctrl+C, then pause the server cleanly (unless we only attached
+// to a session another process started).
 var stop = new ManualResetEventSlim(false);
 Console.CancelKeyPress += (_, e) =>
 {
@@ -139,8 +170,15 @@ Console.CancelKeyPress += (_, e) =>
 started.Wait(TimeSpan.FromSeconds(10));
 stop.Wait();
 
-Console.WriteLine("\nPausing...");
-client.SendCommand("pause");
+if (attached)
+{
+    Console.WriteLine("\nDetaching (leaving the existing session running)...");
+}
+else
+{
+    Console.WriteLine("\nPausing...");
+    client.SendCommand("pause");
+}
 return 0;
 
 /// <summary>Overwrites an in-place block of one or more terminal lines.</summary>

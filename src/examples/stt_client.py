@@ -22,6 +22,10 @@ import threading
 from named_pipes.tools.client import ToolClient
 from named_pipes.utils import _is_fifo_connected
 
+# States in which the mic is already open — set/list_devices and start are
+# skipped so a second client can attach to a session another process started.
+_ACTIVE_STATES = {"listening", "transcribing"}
+
 
 class _LinePrinter:
     """Overwrites an in-place block of one or more terminal lines."""
@@ -61,6 +65,8 @@ def main() -> None:
     devices_received = threading.Event()
     started = threading.Event()
     speech_ended = threading.Event()
+    state_received = threading.Event()
+    current_state = {"value": ""}
 
     with ToolClient("stt") as client:
 
@@ -72,6 +78,11 @@ def main() -> None:
         @client.on("device")
         def _(msg):
             print(f"[device] using index {msg.get('device')}")
+
+        @client.on("state")
+        def _(msg):
+            current_state["value"] = msg.get("state", "")
+            state_received.set()
 
         @client.on("speech_start")
         def _(msg):
@@ -114,28 +125,44 @@ def main() -> None:
         def _(msg):
             print(f"[error] {msg.get('message', '')}", file=sys.stderr)
 
-        client.send_command("list_devices")
-        if not devices_received.wait(timeout=5):
-            print("Timed out waiting for device list.", file=sys.stderr)
+        client.send_command("get_state")
+        if not state_received.wait(timeout=5):
+            print("Timed out waiting for server state.", file=sys.stderr)
             sys.exit(1)
 
-        print("Available input devices:")
-        for d in devices:
-            print(f"  [{d['index']}] {d['name']} ({d['channels']} ch)")
+        attached = current_state["value"] in _ACTIVE_STATES
+        if attached:
+            print(
+                f"STT server already running (state: {current_state['value']}); "
+                "attaching to the existing session.\n"
+            )
+            started.set()
+        else:
+            client.send_command("list_devices")
+            if not devices_received.wait(timeout=5):
+                print("Timed out waiting for device list.", file=sys.stderr)
+                sys.exit(1)
 
-        choice = input("\nSelect a device index (blank = server default): ").strip()
-        device = int(choice) if choice else None
-        client.send_command("set_device", device=device)
+            print("Available input devices:")
+            for d in devices:
+                print(f"  [{d['index']}] {d['name']} ({d['channels']} ch)")
 
-        print("\nStarting transcription. Speak into the mic; Ctrl+C to stop.\n")
-        client.send_command("start")
+            choice = input("\nSelect a device index (blank = server default): ").strip()
+            device = int(choice) if choice else None
+            client.send_command("set_device", device=device)
+
+            print("\nStarting transcription. Speak into the mic; Ctrl+C to stop.\n")
+            client.send_command("start")
 
         try:
             started.wait(timeout=10)
             threading.Event().wait()
         except KeyboardInterrupt:
-            print("\nPausing...")
-            client.send_command("pause")
+            if attached:
+                print("\nDetaching (leaving the existing session running)...")
+            else:
+                print("\nPausing...")
+                client.send_command("pause")
 
 
 if __name__ == "__main__":
