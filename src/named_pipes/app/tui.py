@@ -218,7 +218,7 @@ class LaunchModal(ModalScreen):
     """
 
     def on_mount(self) -> None:
-        self._chat_backend: Backend = Backend.TRANSFORMERS
+        self._chat_backend: Backend = Backend.MLX_LM
 
     @on(Select.Changed, "#chat-backend")
     def on_chat_backend_changed(self, event: Select.Changed) -> None:
@@ -364,8 +364,8 @@ class LaunchModal(ModalScreen):
                         with Horizontal(classes="field-row"):
                             yield Label("model:")
                             yield Select(
-                                _model_options(Backend.TRANSFORMERS),
-                                value=_default_model(Backend.TRANSFORMERS),
+                                _model_options(Backend.MLX_LM),
+                                value=_default_model(Backend.MLX_LM),
                                 allow_blank=False,
                                 id="chat-model",
                             )

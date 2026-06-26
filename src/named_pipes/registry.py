@@ -38,9 +38,9 @@ class Backend(str, Enum):
 
 @dataclass
 class BackendEntry:
-    name: str                  # Python library name / import name
+    name: str  # Python library name / import name
     servers: list[ServerType]
-    platforms: list[str]       # platform.system() values: "Darwin", "Linux"
+    platforms: list[str]  # platform.system() values: "Darwin", "Linux"
 
 
 BACKENDS: dict[Backend, BackendEntry] = {
@@ -87,6 +87,13 @@ class ModelEntry:
 
 
 REGISTRY: list[ModelEntry] = [
+    ModelEntry(
+        hub_id="mlx-community/Qwen3.5-2B-OptiQ-4bit",
+        servers=[ServerType.CHAT],
+        backends=[Backend.MLX_LM],
+        default=True,
+        description="Qwen3.5 2B (4-bit) — default MLX chat model",
+    ),
     ModelEntry(
         hub_id="Qwen/Qwen3.5-0.8B",
         servers=[ServerType.CHAT],

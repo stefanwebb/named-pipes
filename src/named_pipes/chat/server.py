@@ -50,10 +50,10 @@ class ChatState(Enum):
 class ChatConfig(BaseModel):
     name: str = "chat"
     model: str = "Qwen/Qwen3.5-0.8B"
-    backend: Backend = Backend.TRANSFORMERS if platform.system() == "Darwin" else Backend.VLLM
+    backend: Backend = Backend.MLX_LM if platform.system() == "Darwin" else Backend.VLLM
     description: str = "🤖 LLM chat server over a named pipe."
     help_text: str | None = None
-    backend_kwargs: dict = {"max_new_tokens": 256, "do_sample": False}
+    backend_kwargs: dict = {"max_tokens": 4096}
     verbose: bool = True
 
 
@@ -108,6 +108,8 @@ class ChatServer(ToolServer):
                         self._init_vllm(config.model, **config.backend_kwargs)
                     case Backend.TRANSFORMERS:
                         self._init_transformers(config.model, **config.backend_kwargs)
+                    case Backend.MLX_LM:
+                        self._init_mlx_lm(config.model, **config.backend_kwargs)
                     case _:
                         raise ValueError(f"unknown backend: {config.backend!r}")
                 self.set_state(ChatState.IDLE)
@@ -150,7 +152,9 @@ class ChatServer(ToolServer):
         def _run():
             self._model_ready.wait()
             if self._load_error:
-                self.send_event("error", pid, message=f"model failed to load: {self._load_error}")
+                self.send_event(
+                    "error", pid, message=f"model failed to load: {self._load_error}"
+                )
                 return
             self._infer_stream(messages, pid)
 
@@ -161,7 +165,9 @@ class ChatServer(ToolServer):
             self.send_event("error", pid, message="model is still loading")
             return
         if self._load_error:
-            self.send_event("error", pid, message=f"model failed to load: {self._load_error}")
+            self.send_event(
+                "error", pid, message=f"model failed to load: {self._load_error}"
+            )
             return
         messages = msg.get("messages", [])
 
@@ -212,6 +218,55 @@ class ChatServer(ToolServer):
             try:
                 text = infer(messages)
                 self._send_chunk(text, pid)
+                self._send_stream_done(pid)
+            except Exception:
+                self.set_state(ChatState.ERROR)
+                raise
+            self.set_state(ChatState.IDLE)
+
+        self._infer_stream = infer_stream
+
+    def _init_mlx_lm(self, model: str, **generation_kwargs):
+        from mlx_lm import generate, load, stream_generate
+
+        self._model, self._tokenizer = load(model)
+
+        # Remap HuggingFace-style kwargs to mlx_lm conventions.
+        if "max_new_tokens" in generation_kwargs:
+            generation_kwargs.setdefault(
+                "max_tokens", generation_kwargs.pop("max_new_tokens")
+            )
+        generation_kwargs.pop("do_sample", None)
+        self._generation_kwargs = generation_kwargs
+
+        def _prompt(messages):
+            return self._tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True,
+            )
+
+        def infer(messages):
+            return generate(
+                self._model,
+                self._tokenizer,
+                prompt=_prompt(messages),
+                **generation_kwargs,
+            )
+
+        self._infer = infer
+
+        def infer_stream(messages, pid):
+            self.set_state(ChatState.INFERRING)
+            try:
+                for response in stream_generate(
+                    self._model,
+                    self._tokenizer,
+                    prompt=_prompt(messages),
+                    **generation_kwargs,
+                ):
+                    if response.text:
+                        self._send_chunk(response.text, pid)
                 self._send_stream_done(pid)
             except Exception:
                 self.set_state(ChatState.ERROR)
