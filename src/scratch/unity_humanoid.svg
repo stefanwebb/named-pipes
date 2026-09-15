@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1150" width="900" height="1150" role="img" aria-label="Unity Humanoid (Mecanim) joint hierarchy">
+<style>
+.bones line{stroke:var(--bone,#8a93a3);stroke-width:3;stroke-linecap:round}
+.j{fill:var(--joint,#3b4252);stroke:var(--bg,#fff);stroke-width:2}
+.j.leaf,.j.opt{fill:var(--bg,#fff);stroke:var(--joint,#3b4252);stroke-width:2.5}
+.j.root{fill:var(--accent,#2f6fdb);stroke:var(--bg,#fff)}
+.j.hip{fill:var(--amber,#d98c1f);stroke:var(--bg,#fff)}
+.j.foot{fill:var(--green,#2e9a5d);stroke:var(--bg,#fff)}
+.j.grp{fill:var(--bg,#fff);stroke:var(--joint,#3b4252);stroke-width:2.5;stroke-dasharray:3 3}
+.lbl{font:500 15px "JetBrains Mono","SF Mono",Menlo,Consolas,monospace;fill:var(--ink,#1c2230)}
+.idx{fill:var(--muted,#6b7383);font-weight:400}
+.title{font:600 20px "IBM Plex Sans",system-ui,sans-serif;fill:var(--ink,#1c2230)}
+.sub{font:400 13px "IBM Plex Sans",system-ui,sans-serif;fill:var(--muted,#6b7383)}
+.leg text{font:400 13px "IBM Plex Sans",system-ui,sans-serif;fill:var(--ink,#1c2230)}
+.leg line.rule{stroke:var(--rule,#e2e4e0);stroke-width:1}
+</style>
+<rect width="900" height="1150" fill="var(--bg,#fff)"/>
+<g transform="translate(40,44)"><text class="title" x="0" y="0">Unity Humanoid (Mecanim)</text>
+<text class="sub" x="0" y="22">HumanBodyBones enum · 55 bones incl. 30 finger bones · UpperChest was appended last (index 54) · figure faces the viewer</text></g>
+<g class="bones">
+<line x1="450" y1="610" x2="450" y2="532"/>
+<line x1="450" y1="532" x2="450" y2="454"/>
+<line x1="450" y1="454" x2="450" y2="376"/>
+<line x1="450" y1="376" x2="450" y2="276"/>
+<line x1="450" y1="276" x2="450" y2="190"/>
+<line x1="450" y1="190" x2="418" y2="136"/>
+<line x1="450" y1="190" x2="482" y2="136"/>
+<line x1="450" y1="190" x2="450" y2="220"/>
+<line x1="450" y1="376" x2="372" y2="384"/>
+<line x1="372" y1="384" x2="296" y2="410"/>
+<line x1="296" y1="410" x2="236" y2="510"/>
+<line x1="236" y1="510" x2="184" y2="610"/>
+<line x1="184" y1="610" x2="150" y2="704"/>
+<line x1="450" y1="376" x2="528" y2="384"/>
+<line x1="528" y1="384" x2="604" y2="410"/>
+<line x1="604" y1="410" x2="664" y2="510"/>
+<line x1="664" y1="510" x2="716" y2="610"/>
+<line x1="716" y1="610" x2="750" y2="704"/>
+<line x1="450" y1="610" x2="398" y2="654"/>
+<line x1="398" y1="654" x2="388" y2="794"/>
+<line x1="388" y1="794" x2="382" y2="932"/>
+<line x1="382" y1="932" x2="338" y2="974"/>
+<line x1="450" y1="610" x2="502" y2="654"/>
+<line x1="502" y1="654" x2="512" y2="794"/>
+<line x1="512" y1="794" x2="518" y2="932"/>
+<line x1="518" y1="932" x2="562" y2="974"/>
+</g><g class="joints">
+<circle class="j root" cx="450" cy="610" r="11"/>
+<text class="lbl" x="466" y="614" text-anchor="start"><tspan class="idx">0</tspan> Hips</text>
+<circle class="j" cx="450" cy="532" r="8"/>
+<text class="lbl" x="466" y="536" text-anchor="start"><tspan class="idx">7</tspan> Spine</text>
+<circle class="j opt" cx="450" cy="454" r="8"/>
+<text class="lbl" x="466" y="458" text-anchor="start"><tspan class="idx">8</tspan> Chest</text>
+<circle class="j opt" cx="450" cy="376" r="8"/>
+<text class="lbl" x="466" y="380" text-anchor="start"><tspan class="idx">54</tspan> UpperChest</text>
+<circle class="j opt" cx="450" cy="276" r="8"/>
+<text class="lbl" x="466" y="280" text-anchor="start"><tspan class="idx">9</tspan> Neck</text>
+<circle class="j" cx="450" cy="190" r="8"/>
+<text class="lbl" x="466" y="194" text-anchor="start"><tspan class="idx">10</tspan> Head</text>
+<circle class="j opt" cx="418" cy="136" r="8"/>
+<text class="lbl" x="402" y="140" text-anchor="end"><tspan class="idx">22</tspan> RightEye</text>
+<circle class="j opt" cx="482" cy="136" r="8"/>
+<text class="lbl" x="498" y="140" text-anchor="start"><tspan class="idx">21</tspan> LeftEye</text>
+<circle class="j opt" cx="450" cy="220" r="8"/>
+<text class="lbl" x="466" y="224" text-anchor="start"><tspan class="idx">23</tspan> Jaw</text>
+<circle class="j opt" cx="372" cy="384" r="8"/>
+<text class="lbl" x="356" y="388" text-anchor="end"><tspan class="idx">12</tspan> RightShoulder</text>
+<circle class="j" cx="296" cy="410" r="8"/>
+<text class="lbl" x="280" y="414" text-anchor="end"><tspan class="idx">14</tspan> RightUpperArm</text>
+<circle class="j" cx="236" cy="510" r="8"/>
+<text class="lbl" x="220" y="514" text-anchor="end"><tspan class="idx">16</tspan> RightLowerArm</text>
+<circle class="j" cx="184" cy="610" r="8"/>
+<text class="lbl" x="168" y="614" text-anchor="end"><tspan class="idx">18</tspan> RightHand</text>
+<circle class="j grp" cx="150" cy="704" r="8"/>
+<text class="lbl" x="134" y="708" text-anchor="end"><tspan class="idx">39–53</tspan> Right fingers ×15</text>
+<circle class="j opt" cx="528" cy="384" r="8"/>
+<text class="lbl" x="544" y="388" text-anchor="start"><tspan class="idx">11</tspan> LeftShoulder</text>
+<circle class="j" cx="604" cy="410" r="8"/>
+<text class="lbl" x="620" y="414" text-anchor="start"><tspan class="idx">13</tspan> LeftUpperArm</text>
+<circle class="j" cx="664" cy="510" r="8"/>
+<text class="lbl" x="680" y="514" text-anchor="start"><tspan class="idx">15</tspan> LeftLowerArm</text>
+<circle class="j" cx="716" cy="610" r="8"/>
+<text class="lbl" x="732" y="614" text-anchor="start"><tspan class="idx">17</tspan> LeftHand</text>
+<circle class="j grp" cx="750" cy="704" r="8"/>
+<text class="lbl" x="766" y="708" text-anchor="start"><tspan class="idx">24–38</tspan> Left fingers ×15</text>
+<circle class="j" cx="398" cy="654" r="8"/>
+<text class="lbl" x="382" y="658" text-anchor="end"><tspan class="idx">2</tspan> RightUpperLeg</text>
+<circle class="j" cx="388" cy="794" r="8"/>
+<text class="lbl" x="372" y="798" text-anchor="end"><tspan class="idx">4</tspan> RightLowerLeg</text>
+<circle class="j" cx="382" cy="932" r="8"/>
+<text class="lbl" x="366" y="936" text-anchor="end"><tspan class="idx">6</tspan> RightFoot</text>
+<circle class="j opt" cx="338" cy="974" r="8"/>
+<text class="lbl" x="322" y="978" text-anchor="end"><tspan class="idx">20</tspan> RightToes</text>
+<circle class="j" cx="502" cy="654" r="8"/>
+<text class="lbl" x="518" y="658" text-anchor="start"><tspan class="idx">1</tspan> LeftUpperLeg</text>
+<circle class="j" cx="512" cy="794" r="8"/>
+<text class="lbl" x="528" y="798" text-anchor="start"><tspan class="idx">3</tspan> LeftLowerLeg</text>
+<circle class="j" cx="518" cy="932" r="8"/>
+<text class="lbl" x="534" y="936" text-anchor="start"><tspan class="idx">5</tspan> LeftFoot</text>
+<circle class="j opt" cx="562" cy="974" r="8"/>
+<text class="lbl" x="578" y="978" text-anchor="start"><tspan class="idx">19</tspan> LeftToes</text>
+</g>
+<g class="leg" transform="translate(40,1030)"><line class="rule" x1="0" y1="-24" x2="820" y2="-24"/>
+
+  <circle class="j root" cx="8" cy="0" r="8"/><text x="24" y="4">Hips — root, HumanBodyBones 0</text>
+  <circle class="j" cx="8" cy="28" r="8"/><text x="24" y="32">Required bone (15 total) — avatar will not build without it</text>
+  <circle class="j opt" cx="428" cy="0" r="8"/><text x="444" y="4">Optional bone — Mecanim retargets around its absence</text>
+  <circle class="j grp" cx="428" cy="28" r="8"/><text x="444" y="32">Finger group: Thumb/Index/Middle/Ring/Little × Proximal/Intermediate/Distal</text></g>
+</svg>

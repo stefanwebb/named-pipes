@@ -10,6 +10,7 @@ from named_pipes.interfaces.base import BASE
 from named_pipes.interfaces.chat import CHAT
 from named_pipes.interfaces.tts import TTS
 from named_pipes.interfaces.stt import STT
+from named_pipes.interfaces.ardy import ARDY
 
 __all__ = [
     "ArgSpec",
@@ -20,4 +21,5 @@ __all__ = [
     "CHAT",
     "TTS",
     "STT",
+    "ARDY",
 ]

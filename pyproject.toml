@@ -57,6 +57,7 @@ stt = [
     "moonshine-voice",
 ]
 kokoro = ["misaki[en]"]
+ardy = ["numpy"]
 dev = ["pytest", "ruff"]
 
 [project.scripts]

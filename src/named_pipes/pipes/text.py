@@ -46,6 +46,9 @@ class TextNamedPipe(ABC):
         self._pid = pid if pid is not None else os.getpid()
         self._text_stop_r, self._text_stop_w = os.pipe()
         self._text_listener_thread: threading.Thread | None = None
+        # Reassembly state for messages larger than one atomic pipe write.
+        self._text_partial: str = ""
+        self._text_pending: list[str] = []
 
         self._closed = False
         self._pipe_name = pipe_name
@@ -91,9 +94,42 @@ class TextNamedPipe(ABC):
 
     # --- message pipe ---
 
-    def recv_message(self) -> dict:
-        line = self._msg_recv.readline().rstrip("\n")
-        return json.loads(line)
+    def _take_lines(self, chunk: str) -> list[str]:
+        """Accumulate *chunk* and return the COMPLETE lines now available.
+
+        A non-blocking readline() returns a partial line when a large message
+        is still being written, so the tail is held back until the rest of it
+        arrives. Without this, a torn line reaches json.loads and the decode
+        error kills the listener thread.
+        """
+        if not chunk:
+            return []
+        buf = self._text_partial + chunk
+        parts = buf.split("\n")
+        self._text_partial = parts.pop()  # "" when buf ended on a newline
+        return [p for p in parts if p.strip()]
+
+    @staticmethod
+    def _parse_line(line: str) -> dict | None:
+        """Parse one line, reporting rather than raising on malformed JSON.
+
+        A single bad message must not take the listener thread down with it.
+        """
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError as exc:
+            preview = line[:120] + ("..." if len(line) > 120 else "")
+            print(f"[named-pipes] discarding malformed message ({exc}): {preview}")
+            return None
+
+    def recv_message(self) -> dict | None:
+        """Read one complete JSON message, or None if none was available."""
+        lines = self._take_lines(self._msg_recv.readline())
+        if not lines:
+            return None
+        first, *rest = lines
+        self._text_pending.extend(rest)
+        return self._parse_line(first)
 
     def send_message(self, data: str, pid: int | None = None):
         """Send *data* to one subscriber (*pid* given) or all subscribers (*pid* = None).
@@ -175,16 +211,21 @@ class TextNamedPipe(ABC):
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
         try:
-            while True:
-                try:
-                    line = self._msg_recv.readline()
-                except BlockingIOError:
-                    return
-                if not line:
-                    return
-                msg = json.loads(line.rstrip("\n"))
+            while self._text_pending:
+                msg = self._parse_line(self._text_pending.pop(0))
                 if msg:
                     self.msg_handler_fn(msg, msg.get("pid"))
+            while True:
+                try:
+                    chunk = self._msg_recv.readline()
+                except BlockingIOError:
+                    return
+                if not chunk:
+                    return
+                for line in self._take_lines(chunk):
+                    msg = self._parse_line(line)
+                    if msg:
+                        self.msg_handler_fn(msg, msg.get("pid"))
         finally:
             fcntl.fcntl(fd, fcntl.F_SETFL, flags)
 
