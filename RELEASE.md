@@ -1,18 +1,18 @@
 ## New features
 
-- **Per-word forced-alignment timestamps for STT** — set `align=True` (`STTConfig.align`) to attach absolute-epoch word timestamps to `speech` events; backed by a new `ForcedAligner` wrapper around `mlx-audio`'s `Qwen3-ForcedAligner-0.6B-4bit` and a `CoalescingAligner` background worker that re-aligns on word boundaries plus once at `speech_end`
-- **Out-of-process aligner** — `SubprocessAligner` runs the forced aligner in a spawned child process, since concurrent Metal use by the decoder and aligner in one process hangs the server
-- **`--align` flag for `cpipe --serve stt`**, and an align toggle in the TUI's STT launcher (now defaulting to on)
-- **STT model caching across pause/resume** — Voxtral and Silero VAD are now cached on the server and reused across `pause`/`start` instead of reloading from disk; both load eagerly in a background thread at construction (state `loading` until ready), with the forced aligner warmed concurrently
-- **STT console clients rewritten** — `Program.cs` (the C# `ToolClient` demo) and `src/examples/stt_client.py` now list/select an input device, stream live transcription with word timings in place, and detect an already-running session (via `get_state`) to attach to it instead of restarting it; Ctrl+C only sends `pause` if the client itself started the session
+- **ARDY motion-diffusion interface (`named_pipes.ardy`)** — `ArdyServer` serves NVIDIA ARDY autoregressive motion-diffusion inference over a named pipe as a stateless evaluator with five commands: `model_info`, `tokenize`, `detokenize`, `requantize`, and `denoise` (one sampler step). No text encoder is loaded, so the process stays near the ~0.8 GB motion model; `text_feat` is supplied by the caller. Model loading is inlined from the checkpoint's Hydra config so the server imports neither Hydra nor OmegaConf. Launch with `python -m named_pipes.ardy.launch`
+- **`ArdyClient` / `ArdySession`** — the client owns all session state (hybrid history tokens, accumulated world translation, first-frame heading) and runs the denoising loop itself via `denoise_loop`, so one loaded model serves many characters and the server can be restarted mid-take. Blocking request/response correlated by `req_id`; tensors travel as base64 little-endian payloads with shape/dtype
+- **`ARDY` interface spec** registered in `named_pipes.interfaces`, driving the TUI Messenger's command UI
+- **mlx_lm chat backend** — `ChatServer` gains `Backend.MLX_LM` with streaming via `stream_generate`; HuggingFace kwargs (`max_new_tokens`, `do_sample`) are remapped to mlx_lm conventions. `mlx-community/Qwen3.5-2B-OptiQ-4bit` is registered as the default Mac chat model, and `ChatConfig` / the TUI launcher default to it with `max_tokens=4096`
+- **`named-pipes[ardy]` extra** (numpy)
 
 ## Improvements
 
-- Clients only print word-level timestamps once `speech_end` has fired, instead of re-printing the live partial transcript a second time when the (asynchronous, out-of-process) alignment result arrives late
-- Added a wall-clock anchor, `abs_start`, and an `on_audio` callback to `stream_transcribe`, needed to compute absolute word timestamps
-- Fixed `pre_roll_starts` falling out of lockstep with `pre_roll` in `flush_and_reset`
+- **Transport robustness** — `TextNamedPipe` now reassembles messages larger than one atomic pipe write (a non-blocking `readline()` can return a torn line while a large payload is still being written) and discards malformed JSON with a logged preview instead of letting a `JSONDecodeError` kill the listener thread. This affects every interface
 
 ## Infrastructure / Documentation
 
-- Added design spec and implementation plan docs for STT per-word forced-alignment timestamps
-- Made `named_pipes.stt`'s package `__init__` lazy; repaired a stale `STTServer` test for the lazy-start architecture
+- `named_pipes/ardy/README.md` and `HELP.md` document the protocol, wire format, and client/server division of labour
+- `src/examples/ardy_stub_server.py` stub for exercising the client without the `ardy` package; `tests/test_ardy_client.py`
+- Scratch assets: CoreSkeleton27 and Unity-humanoid joint-hierarchy SVG diagrams, FBX build/verify scripts
+- Terminal AppleScripts, Claude Code notification hooks, and Moonshine TTS scratch
